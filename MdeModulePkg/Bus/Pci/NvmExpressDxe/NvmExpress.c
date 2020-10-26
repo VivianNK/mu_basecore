@@ -627,6 +627,9 @@ ProcessAsyncTaskList (
   EFI_BLOCK_IO2_TOKEN           *Token;
   BOOLEAN                       HasNewItem;
   EFI_STATUS                    Status;
+  // MU_CHANGE - Support alternative hardware queue sizes in NVME driver
+  UINT16  QueueSize = PcdGetBool (PcdSupportAlternativeQueueSize) ?
+                      NVME_ALTERNATIVE_MAX_QUEUE_SIZE : NVME_ASYNC_CCQ_SIZE;
 
   Private    = (NVME_CONTROLLER_PRIVATE_DATA *)Context;
   QueueId    = 2;
@@ -769,7 +772,8 @@ ProcessAsyncTaskList (
     }
 
     Private->CqHdbl[QueueId].Cqh++;
-    if (Private->CqHdbl[QueueId].Cqh > MIN (NVME_ASYNC_CCQ_SIZE, Private->Cap.Mqes)) {
+    // MU_CHANGE - Support alternative hardware queue sizes in NVME driver
+    if (Private->CqHdbl[QueueId].Cqh > MIN (QueueSize, Private->Cap.Mqes)) {
       Private->CqHdbl[QueueId].Cqh = 0;
       Private->Pt[QueueId]        ^= 1;
     }
@@ -1084,10 +1088,12 @@ NvmExpressDriverBindingStart (
     //
 
     // Set the sizes of the admin submission & completion queues in number of entries
-    Aqa.Asqs  = MIN (NVME_ASQ_SIZE, Private->Cap.Mqes);
+    // MU_CHANGE [BEGIN] - Support alternative hardware queue sizes in NVME driver
+    Aqa.Asqs  = PcdGetBool (PcdSupportAlternativeQueueSize) ? MIN (NVME_ALTERNATIVE_MAX_QUEUE_SIZE, Private->Cap.Mqes) : MIN (NVME_ASQ_SIZE, Private->Cap.Mqes);
     Aqa.Rsvd1 = 0;
-    Aqa.Acqs  = MIN (NVME_ACQ_SIZE, Private->Cap.Mqes);
+    Aqa.Acqs  = PcdGetBool (PcdSupportAlternativeQueueSize) ? MIN (NVME_ALTERNATIVE_MAX_QUEUE_SIZE, Private->Cap.Mqes) : MIN (NVME_ACQ_SIZE, Private->Cap.Mqes);
     Aqa.Rsvd2 = 0;
+    // MU_CHANGE [END] - Support alternative hardware queue sizes in NVME driver
 
     //
     // Save Queue Pair Data for admin queues in controller data structure
@@ -1117,10 +1123,18 @@ NvmExpressDriverBindingStart (
     //
     // Allocate 6 pages of memory, then map it for bus master read and write.
     //
-
-    // MU_CHANGE [BEGIN] - Allocate IO Queue Buffer
+    // MU_CHANGE [BEGIN] - Support alternative hardware queue sizes in NVME driver
+    // Alternative:
+    // 15 x 4kB aligned buffers will be carved out of this buffer.
+    // 1st 4kB boundary is the start of the admin submission queue.
+    // 5th 4kB boundary is the start of the admin completion queue.
+    // 6th 4kB boundary is the start of I/O submission queue #1.
+    // 10th 4kB boundary is the start of I/O completion queue #1.
+    // 11th 4kB boundary is the start of I/O submission queue #2.
+    // 15th 4kB boundary is the start of I/O completion queue #2.
     //
-    // Allocate Admin Queues
+    // Allocate 15 pages of memory, then map it for bus master read and write.
+    // MU_CHANGE [END] - Support alternative hardware queue sizes in NVME driver
     //
     Status = PciIo->AllocateBuffer (
                       PciIo,
