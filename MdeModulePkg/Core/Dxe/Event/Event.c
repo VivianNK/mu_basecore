@@ -225,7 +225,8 @@ CoreNotifyEvent (
   //
   // Queue the event to the pending notification list
   //
-
+  DEBUG ((DEBUG_INFO, "%a:%d - Image Name: %a\n", __FUNCTION__, __LINE__, PeCoffLoaderGetPdbPointer((VOID*) PeCoffSearchImageBase((UINTN)Event->NotifyFunction))));
+  DEBUG ((DEBUG_INFO, "%a:%d - Function: 0x%llx - Image Address: 0x%llx = 0x%llx\n", __FUNCTION__, __LINE__, Event->NotifyFunction, PeCoffSearchImageBase((UINTN)Event->NotifyFunction), ((UINTN) Event->NotifyFunction) - PeCoffSearchImageBase((UINTN)Event->NotifyFunction)));
   InsertTailList (&gEventQueue[Event->NotifyTpl], &Event->NotifyLink);
   gEventPending |= (UINTN)(1 << Event->NotifyTpl);
 }
