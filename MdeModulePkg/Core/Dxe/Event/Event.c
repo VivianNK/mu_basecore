@@ -230,7 +230,8 @@ CoreNotifyEvent (
   DEBUG ((DEBUG_INFO, "%a:%d - Function: 0x%llx - Image Address: 0x%llx = 0x%llx\n", __FUNCTION__, __LINE__, Event->NotifyFunction, PeCoffSearchImageBase((UINTN)Event->NotifyFunction), ((UINTN) Event->NotifyFunction) - PeCoffSearchImageBase((UINTN)Event->NotifyFunction)));
   
   EFI_STATUS timeStatus = 0;
-  EFI_TIME *timestamp = malloc(sizeof(EFI_TIME));
+  EFI_TIME *timestamp = AllocateRuntimePool(sizeof(EFI_TIME));
+
   timeStatus = gDxeCoreRT->GetTime(timestamp, NULL);
 
   if (timeStatus == EFI_SUCCESS) {
@@ -260,6 +261,8 @@ CoreNotifySignalList (
   IEVENT      *Event;
 
   CoreAcquireEventLock ();
+  DEBUG ((DEBUG_INFO, "%a:%d - Notify event group list: %g\n", __FUNCTION__, __LINE__, EventGroup));
+
 
   Head = &gEventSignalQueue;
   for (Link = Head->ForwardLink; Link != Head; Link = Link->ForwardLink) {
@@ -547,6 +550,7 @@ CoreSignalEvent (
   }
 
   CoreAcquireEventLock ();
+  DEBUG ((DEBUG_INFO, "%a:%d - Event Signalled: %u\n", __FUNCTION__, __LINE__, Event->Signature));
 
   //
   // If the event is not already signalled, do so
