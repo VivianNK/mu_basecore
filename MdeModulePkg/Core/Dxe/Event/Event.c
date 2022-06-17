@@ -9,6 +9,7 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 
 #include "DxeMain.h"
 #include "Event.h"
+#include <stdlib.h>
 
 ///
 /// gEfiCurrentTpl - Current Task priority level
@@ -227,6 +228,18 @@ CoreNotifyEvent (
   //
   DEBUG ((DEBUG_INFO, "%a:%d - Image Name: %a\n", __FUNCTION__, __LINE__, PeCoffLoaderGetPdbPointer((VOID*) PeCoffSearchImageBase((UINTN)Event->NotifyFunction))));
   DEBUG ((DEBUG_INFO, "%a:%d - Function: 0x%llx - Image Address: 0x%llx = 0x%llx\n", __FUNCTION__, __LINE__, Event->NotifyFunction, PeCoffSearchImageBase((UINTN)Event->NotifyFunction), ((UINTN) Event->NotifyFunction) - PeCoffSearchImageBase((UINTN)Event->NotifyFunction)));
+  
+  EFI_STATUS timeStatus = 0;
+  EFI_TIME *timestamp = malloc(sizeof(EFI_TIME));
+  timeStatus = gDxeCoreRT->GetTime(timestamp, NULL);
+
+  if (timeStatus == EFI_SUCCESS) {
+      // seconds, nanoseconds: UINT 8, 32
+      DEBUG ((DEBUG_INFO, "%a:%d - Timestamp: %u seconds : %u nanoseconds\n", __FUNCTION__, __LINE__, timestamp->Second, timestamp->Nanosecond));
+  } else {
+      DEBUG ((DEBUG_INFO, "%a:%d - timeStatus: %u\n", __FUNCTION__, __LINE__, timeStatus));
+  }
+
   InsertTailList (&gEventQueue[Event->NotifyTpl], &Event->NotifyLink);
   gEventPending |= (UINTN)(1 << Event->NotifyTpl);
 }
