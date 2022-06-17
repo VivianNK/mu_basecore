@@ -9,7 +9,6 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 
 #include "DxeMain.h"
 #include "Event.h"
-#include <stdlib.h>
 
 ///
 /// gEfiCurrentTpl - Current Task priority level
@@ -37,7 +36,7 @@ volatile UINTN  gEventPending = 0;                     // MS_CHANGE
 LIST_ENTRY  gEventSignalQueue = INITIALIZE_LIST_HEAD_VARIABLE (gEventSignalQueue);
 
 ///
-/// gEventSignalQueue - A list of events to signal based on EventGroup type
+/// gTimestamp - A timstamp to use for tracking events
 ///
 EFI_TIME  *gTimestamp = NULL;
 
@@ -136,13 +135,13 @@ CoreInitializeEventServices (
   CoreInitializeTimer ();
 
   CoreCreateEventEx (
-                     EVT_NOTIFY_SIGNAL,
-                     TPL_NOTIFY,
-                     EfiEventEmptyFunction,
-                     NULL,
-                     &gIdleLoopEventGuid,
-                     &gIdleLoopEvent
-                     );
+    EVT_NOTIFY_SIGNAL,
+    TPL_NOTIFY,
+    EfiEventEmptyFunction,
+    NULL,
+    &gIdleLoopEventGuid,
+    &gIdleLoopEvent
+    );
 
   return EFI_SUCCESS;
 }
@@ -234,10 +233,6 @@ CoreNotifyEvent (
   DEBUG ((DEBUG_INFO, "%a:%d - Image Name: %a\n", __FUNCTION__, __LINE__, PeCoffLoaderGetPdbPointer ((VOID *)PeCoffSearchImageBase ((UINTN)Event->NotifyFunction))));
   DEBUG ((DEBUG_INFO, "%a:%d - Function: 0x%llx - Image Address: 0x%llx = 0x%llx\n", __FUNCTION__, __LINE__, Event->NotifyFunction, PeCoffSearchImageBase ((UINTN)Event->NotifyFunction), ((UINTN)Event->NotifyFunction) - PeCoffSearchImageBase ((UINTN)Event->NotifyFunction)));
 
-  if (gTimestamp == NULL) {
-    gTimestamp = AllocateRuntimePool (sizeof (EFI_TIME));
-  }
-
   EFI_STATUS  timeStatus = 0;
   timeStatus = gDxeCoreRT->GetTime (gTimestamp, NULL);
 
@@ -266,6 +261,20 @@ CoreNotifySignalList (
   LIST_ENTRY  *Link;
   LIST_ENTRY  *Head;
   IEVENT      *Event;
+
+  // can allocate pool here (regular)
+  if (gTimestamp == NULL) {
+    DEBUG ((DEBUG_INFO, "%a:%d - gTimestamp is NULL\n", __FUNCTION__, __LINE__));
+    UINTN Size = sizeof (EFI_TIME) + sizeof (VOID *);
+    DEBUG ((DEBUG_INFO, "%a:%d - Size is %u\n", __FUNCTION__, __LINE__, Size));
+    // todo try allocatezeropool
+    gTimestamp = AllocatePool (Size);
+    if (gTimestamp == NULL) {
+      DEBUG ((DEBUG_INFO, "%a:%d - Failed to allocate pool for timestamp\n", __FUNCTION__, __LINE__));
+    } else {
+      DEBUG ((DEBUG_INFO, "%a:%d - gTimestamp is allocated\n", __FUNCTION__, __LINE__));
+    }
+  }
 
   CoreAcquireEventLock ();
   // DEBUG ((DEBUG_INFO, "%a:%d - Notify event group list: %g\n", __FUNCTION__, __LINE__, EventGroup));
