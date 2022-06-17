@@ -37,6 +37,11 @@ volatile UINTN  gEventPending = 0;                     // MS_CHANGE
 LIST_ENTRY  gEventSignalQueue = INITIALIZE_LIST_HEAD_VARIABLE (gEventSignalQueue);
 
 ///
+/// gEventSignalQueue - A list of events to signal based on EventGroup type
+///
+EFI_TIME  *gTimestamp = NULL;
+
+///
 /// Enumerate the valid types
 ///
 UINT32  mEventTable[] = {
@@ -131,13 +136,13 @@ CoreInitializeEventServices (
   CoreInitializeTimer ();
 
   CoreCreateEventEx (
-    EVT_NOTIFY_SIGNAL,
-    TPL_NOTIFY,
-    EfiEventEmptyFunction,
-    NULL,
-    &gIdleLoopEventGuid,
-    &gIdleLoopEvent
-    );
+                     EVT_NOTIFY_SIGNAL,
+                     TPL_NOTIFY,
+                     EfiEventEmptyFunction,
+                     NULL,
+                     &gIdleLoopEventGuid,
+                     &gIdleLoopEvent
+                     );
 
   return EFI_SUCCESS;
 }
@@ -226,19 +231,21 @@ CoreNotifyEvent (
   //
   // Queue the event to the pending notification list
   //
-  DEBUG ((DEBUG_INFO, "%a:%d - Image Name: %a\n", __FUNCTION__, __LINE__, PeCoffLoaderGetPdbPointer((VOID*) PeCoffSearchImageBase((UINTN)Event->NotifyFunction))));
-  DEBUG ((DEBUG_INFO, "%a:%d - Function: 0x%llx - Image Address: 0x%llx = 0x%llx\n", __FUNCTION__, __LINE__, Event->NotifyFunction, PeCoffSearchImageBase((UINTN)Event->NotifyFunction), ((UINTN) Event->NotifyFunction) - PeCoffSearchImageBase((UINTN)Event->NotifyFunction)));
-  
-  EFI_STATUS timeStatus = 0;
-  EFI_TIME *timestamp = AllocateRuntimePool(sizeof(EFI_TIME));
+  DEBUG ((DEBUG_INFO, "%a:%d - Image Name: %a\n", __FUNCTION__, __LINE__, PeCoffLoaderGetPdbPointer ((VOID *)PeCoffSearchImageBase ((UINTN)Event->NotifyFunction))));
+  DEBUG ((DEBUG_INFO, "%a:%d - Function: 0x%llx - Image Address: 0x%llx = 0x%llx\n", __FUNCTION__, __LINE__, Event->NotifyFunction, PeCoffSearchImageBase ((UINTN)Event->NotifyFunction), ((UINTN)Event->NotifyFunction) - PeCoffSearchImageBase ((UINTN)Event->NotifyFunction)));
 
-  timeStatus = gDxeCoreRT->GetTime(timestamp, NULL);
+  if (gTimestamp == NULL) {
+    gTimestamp = AllocateRuntimePool (sizeof (EFI_TIME));
+  }
+
+  EFI_STATUS  timeStatus = 0;
+  timeStatus = gDxeCoreRT->GetTime (gTimestamp, NULL);
 
   if (timeStatus == EFI_SUCCESS) {
-      // seconds, nanoseconds: UINT 8, 32
-      DEBUG ((DEBUG_INFO, "%a:%d - Timestamp: %u seconds : %u nanoseconds\n", __FUNCTION__, __LINE__, timestamp->Second, timestamp->Nanosecond));
+    // seconds, nanoseconds: UINT 8, 32
+    DEBUG ((DEBUG_INFO, "%a:%d - Timestamp: %u seconds : %u nanoseconds\n", __FUNCTION__, __LINE__, gTimestamp->Second, gTimestamp->Nanosecond));
   } else {
-      DEBUG ((DEBUG_INFO, "%a:%d - timeStatus: %u\n", __FUNCTION__, __LINE__, timeStatus));
+    DEBUG ((DEBUG_INFO, "%a:%d - timeStatus: %u\n", __FUNCTION__, __LINE__, timeStatus));
   }
 
   InsertTailList (&gEventQueue[Event->NotifyTpl], &Event->NotifyLink);
@@ -261,8 +268,7 @@ CoreNotifySignalList (
   IEVENT      *Event;
 
   CoreAcquireEventLock ();
-  DEBUG ((DEBUG_INFO, "%a:%d - Notify event group list: %g\n", __FUNCTION__, __LINE__, EventGroup));
-
+  // DEBUG ((DEBUG_INFO, "%a:%d - Notify event group list: %g\n", __FUNCTION__, __LINE__, EventGroup));
 
   Head = &gEventSignalQueue;
   for (Link = Head->ForwardLink; Link != Head; Link = Link->ForwardLink) {
@@ -550,7 +556,7 @@ CoreSignalEvent (
   }
 
   CoreAcquireEventLock ();
-  DEBUG ((DEBUG_INFO, "%a:%d - Event Signalled: %u\n", __FUNCTION__, __LINE__, Event->Signature));
+  // DEBUG ((DEBUG_INFO, "%a:%d - Event Signalled: %u\n", __FUNCTION__, __LINE__, Event->Signature));
 
   //
   // If the event is not already signalled, do so
