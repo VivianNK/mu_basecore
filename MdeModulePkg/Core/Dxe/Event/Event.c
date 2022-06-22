@@ -227,21 +227,17 @@ CoreNotifyEvent (
     Event->NotifyLink.ForwardLink = NULL;
   }
 
+  // EFI_PAGES_TO_SIZE(1)
+  // other data: Event->EventGroup (guid), 
+
   //
   // Queue the event to the pending notification list
   //
   DEBUG ((DEBUG_INFO, "%a:%d - Image Name: %a\n", __FUNCTION__, __LINE__, PeCoffLoaderGetPdbPointer ((VOID *)PeCoffSearchImageBase ((UINTN)Event->NotifyFunction))));
   DEBUG ((DEBUG_INFO, "%a:%d - Function: 0x%llx - Image Address: 0x%llx = 0x%llx\n", __FUNCTION__, __LINE__, Event->NotifyFunction, PeCoffSearchImageBase ((UINTN)Event->NotifyFunction), ((UINTN)Event->NotifyFunction) - PeCoffSearchImageBase ((UINTN)Event->NotifyFunction)));
+  DEBUG ((DEBUG_INFO, "%a:%d - Time (Ns): %u\n", __FUNCTION__, __LINE__, GetTimeInNanoSecond (GetPerformanceCounter ())));
+  DEBUG ((DEBUG_INFO, "%a:%d - Tpl: %u\n", __FUNCTION__, __LINE__, Event->NotifyTpl));
 
-  EFI_STATUS  timeStatus = 0;
-  timeStatus = gDxeCoreRT->GetTime (gTimestamp, NULL);
-
-  if (timeStatus == EFI_SUCCESS) {
-    // seconds, nanoseconds: UINT 8, 32
-    DEBUG ((DEBUG_INFO, "%a:%d - Timestamp: %u seconds : %u nanoseconds\n", __FUNCTION__, __LINE__, gTimestamp->Second, gTimestamp->Nanosecond));
-  } else {
-    DEBUG ((DEBUG_INFO, "%a:%d - timeStatus: %u\n", __FUNCTION__, __LINE__, timeStatus));
-  }
 
   InsertTailList (&gEventQueue[Event->NotifyTpl], &Event->NotifyLink);
   gEventPending |= (UINTN)(1 << Event->NotifyTpl);
@@ -264,20 +260,18 @@ CoreNotifySignalList (
 
   // can allocate pool here (regular)
   if (gTimestamp == NULL) {
-    DEBUG ((DEBUG_INFO, "%a:%d - gTimestamp is NULL\n", __FUNCTION__, __LINE__));
+    DEBUG ((DEBUG_INFO, "%a:%d - gTimestamp is NULL. Event group: %g\n", __FUNCTION__, __LINE__, EventGroup));
     UINTN Size = sizeof (EFI_TIME) + sizeof (VOID *);
-    DEBUG ((DEBUG_INFO, "%a:%d - Size is %u\n", __FUNCTION__, __LINE__, Size));
-    // todo try allocatezeropool
-    gTimestamp = AllocatePool (Size);
+    // DEBUG ((DEBUG_INFO, "%a:%d - Size is %u\n", __FUNCTION__, __LINE__, Size));
+    gTimestamp = AllocateZeroPool (Size);
     if (gTimestamp == NULL) {
-      DEBUG ((DEBUG_INFO, "%a:%d - Failed to allocate pool for timestamp\n", __FUNCTION__, __LINE__));
+      DEBUG ((DEBUG_INFO, "%a:%d - Failed to allocate zero pool for timestamp\n", __FUNCTION__, __LINE__));
     } else {
       DEBUG ((DEBUG_INFO, "%a:%d - gTimestamp is allocated\n", __FUNCTION__, __LINE__));
     }
   }
 
   CoreAcquireEventLock ();
-  // DEBUG ((DEBUG_INFO, "%a:%d - Notify event group list: %g\n", __FUNCTION__, __LINE__, EventGroup));
 
   Head = &gEventSignalQueue;
   for (Link = Head->ForwardLink; Link != Head; Link = Link->ForwardLink) {
@@ -565,7 +559,6 @@ CoreSignalEvent (
   }
 
   CoreAcquireEventLock ();
-  // DEBUG ((DEBUG_INFO, "%a:%d - Event Signalled: %u\n", __FUNCTION__, __LINE__, Event->Signature));
 
   //
   // If the event is not already signalled, do so
