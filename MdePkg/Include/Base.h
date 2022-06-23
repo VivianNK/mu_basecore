@@ -257,6 +257,16 @@ struct _LIST_ENTRY {
   LIST_ENTRY    *BackLink;
 };
 
+///
+/// Event Info Data Type .
+///
+typedef struct {
+  CHAR8     ImagePath[256];
+  CHAR8     FunctionAddress[16];
+  UINT64    TimeInNanoSeconds;
+  EFI_TPL   Tpl;              // UINTN
+} EventInfo;
+
 //
 // Modifiers to abstract standard types to aid in debug of problems
 //

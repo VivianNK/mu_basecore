@@ -454,8 +454,6 @@ PcRtcGetTime (
   EFI_STATUS      Status;
   RTC_REGISTER_B  RegisterB;
 
-  DEBUG ((DEBUG_INFO, "%a:%d - inside func to get time\n", __FUNCTION__, __LINE__));
-
   //
   // Check parameters for null pointer
   //
