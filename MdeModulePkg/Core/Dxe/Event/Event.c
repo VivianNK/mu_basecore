@@ -210,10 +210,12 @@ CoreDispatchEventNotifies (
 **/
 VOID
 CoreNotifyEvent (
-  IN    IEVENT        *Event,
-  OUT   EVENT_INFO    *EventInfoBuffer,
-  OUT   EVENT_INFO    CurrentEventInfo,
-  OUT   UINTN         CurrentBufferI
+  IEVENT        *Event,
+  EVENT_INFO    *EventInfoBuffer,
+  EVENT_INFO    CurrentEventInfo,
+  UINTN         CurrentBufferI
+  // OUT   CHAR16
+  //todo add string pointer
   )
 {
   //
@@ -232,25 +234,24 @@ CoreNotifyEvent (
   //
   // Debug statements for event info [VNK]
   //
-  // other data: Event->EventGroup (guid)?, ... 
-
-  // TODO, copy string over
-  // CurrentEventInfo.ImagePath = CloneString(PeCoffLoaderGetPdbPointer ((VOID *)PeCoffSearchImageBase ((UINTN)Event->NotifyFunction)));
-
-  CurrentEventInfo.ImagePath = PeCoffLoaderGetPdbPointer ((VOID *)PeCoffSearchImageBase ((UINTN)Event->NotifyFunction));
-  CurrentEventInfo.FunctionAddress = ((UINTN)Event->NotifyFunction) - PeCoffSearchImageBase ((UINTN)Event->NotifyFunction);
+  // other data: Event->EventGroup (guid), ... 
+  StrCpyS (CurrentEventInfo.ImagePath, StrLen (PeCoffLoaderGetPdbPointer ((VOID *)PeCoffSearchImageBase ((UINTN)Event->NotifyFunction))) + 1, PeCoffLoaderGetPdbPointer ((VOID *)PeCoffSearchImageBase ((UINTN)Event->NotifyFunction)));
+  StrCpyS (CurrentEventInfo.FunctionAddress, StrLen (((UINTN)Event->NotifyFunction) - PeCoffSearchImageBase ((UINTN)Event->NotifyFunction)) + 1, ((UINTN)Event->NotifyFunction) - PeCoffSearchImageBase ((UINTN)Event->NotifyFunction));
+  // CloneString(PeCoffLoaderGetPdbPointer ((VOID *)PeCoffSearchImageBase ((UINTN)Event->NotifyFunction)));
   CurrentEventInfo.TimeInNanoSeconds = GetTimeInNanoSecond (GetPerformanceCounter ());
   CurrentEventInfo.Tpl = Event->NotifyTpl;
 
-  DEBUG ((DEBUG_INFO, "%a:%d - Image Name: %a\n", __FUNCTION__, __LINE__, PeCoffLoaderGetPdbPointer ((VOID *)PeCoffSearchImageBase ((UINTN)Event->NotifyFunction))));
-  DEBUG ((DEBUG_INFO, "%a:%d - Function: 0x%llx - Image Address: 0x%llx = 0x%llx\n", __FUNCTION__, __LINE__, Event->NotifyFunction, PeCoffSearchImageBase ((UINTN)Event->NotifyFunction), ((UINTN)Event->NotifyFunction) - PeCoffSearchImageBase ((UINTN)Event->NotifyFunction)));
-  DEBUG ((DEBUG_INFO, "%a:%d - Time (Ns): %u\n", __FUNCTION__, __LINE__, GetTimeInNanoSecond (GetPerformanceCounter ())));
-  DEBUG ((DEBUG_INFO, "%a:%d - Tpl: %u\n", __FUNCTION__, __LINE__, Event->NotifyTpl));            
+  DEBUG ((DEBUG_INFO, "%a:%d - Image Name: %a\n", __FUNCTION__, __LINE__, CurrentEventInfo.ImagePath));
+  DEBUG ((DEBUG_INFO, "%a:%d - Function: 0x%llx - Image Address: 0x%llx = 0x%llx\n", __FUNCTION__, __LINE__, CurrentEventInfo.FunctionAddress));
+  DEBUG ((DEBUG_INFO, "%a:%d - Time (Ns): %u\n", __FUNCTION__, __LINE__, CurrentEventInfo.TimeInNanoSeconds));
+  DEBUG ((DEBUG_INFO, "%a:%d - Tpl: %u\n", __FUNCTION__, __LINE__, CurrentEventInfo.Tpl));            
+  DEBUG ((DEBUG_INFO, "%a:%d - Event Group (GUID): %g\n", __FUNCTION__, __LINE__, Event->EventGroup));            
 
+
+  // Move cur event info pointer up 
   EventInfoBuffer[CurrentBufferI] = CurrentEventInfo;
   CurrentBufferI++;
   CurrentEventInfo = EventInfoBuffer[CurrentBufferI];
-  // increment event into p
 
   //
   // Queue the event to the pending notification list
@@ -290,7 +291,7 @@ CoreNotifySignalList (
   for (Link = Head->ForwardLink; Link != Head; Link = Link->ForwardLink) {
     Event = CR (Link, IEVENT, SignalLink, EVENT_SIGNATURE);
     if (CompareGuid (&Event->EventGroup, EventGroup)) {
-      CoreNotifyEvent (Event, EventInfoBuffer, CurrentEventInfo, CurrentBufferIndex);
+      CoreNotifyEvent (Event, EventInfoBuffer, *CurrentEventInfo, CurrentBufferIndex);
     }
   }
 
