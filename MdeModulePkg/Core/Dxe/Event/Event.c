@@ -38,7 +38,7 @@ LIST_ENTRY  gEventSignalQueue = INITIALIZE_LIST_HEAD_VARIABLE (gEventSignalQueue
 ///
 /// gEventTable - A list of events fired of EVENT_INFO type [vnk]
 ///
-LIST_ENTRY gEventInfoList = INITIALIZE_LIST_HEAD_VARIABLE(gEventInfoList);
+LIST_ENTRY  gEventInfoList = INITIALIZE_LIST_HEAD_VARIABLE (gEventInfoList);
 
 ///
 /// Enumerate the valid types
@@ -135,13 +135,13 @@ CoreInitializeEventServices (
   CoreInitializeTimer ();
 
   CoreCreateEventEx (
-    EVT_NOTIFY_SIGNAL,
-    TPL_NOTIFY,
-    EfiEventEmptyFunction,
-    NULL,
-    &gIdleLoopEventGuid,
-    &gIdleLoopEvent
-    );
+                     EVT_NOTIFY_SIGNAL,
+                     TPL_NOTIFY,
+                     EfiEventEmptyFunction,
+                     NULL,
+                     &gIdleLoopEventGuid,
+                     &gIdleLoopEvent
+                     );
 
   return EFI_SUCCESS;
 }
@@ -210,13 +210,15 @@ CoreDispatchEventNotifies (
 **/
 VOID
 CoreNotifyEvent (
-  IN IEVENT     *Event,
-  EVENT_INFO    *EventInfoBuffer,
-  EVENT_INFO    *CurrentEventInfo,
-  UINTN         CurrentBufferI
-  //todo add string buffer CHAR16
+  IN IEVENT          *Event,
+  IN OUT EVENT_INFO  *CurrentEventInfo
   )
 {
+  VOID   *PdbPath; // filename
+  UINTN  NotifyFunctionPtr;
+  UINTN  ImageBase;
+  UINTN  FunctionAddrOffset;
+
   //
   // Event database must be locked
   //
@@ -230,29 +232,39 @@ CoreNotifyEvent (
     Event->NotifyLink.ForwardLink = NULL;
   }
 
+  // PeCoffLoaderGetPdbPointer ((VOID *)PeCoffSearchImageBase ((UINTN)Event->NotifyFunction))
+  // ((UINTN)Event->NotifyFunction) - PeCoffSearchImageBase ((UINTN)Event->NotifyFunction))
+  NotifyFunctionPtr  = (UINTN)Event->NotifyFunction;
+  ImageBase          = PeCoffSearchImageBase (NotifyFunctionPtr);
+  PdbPath            = PeCoffLoaderGetPdbPointer ((VOID *)ImageBase);
+  FunctionAddrOffset = NotifyFunctionPtr - ImageBase;
+
+  // TODO if currenteventinfo is null (wrap code)
+
+  AsciiStrCpyS (
+                CurrentEventInfo->ImagePath,
+                AsciiStrnLenS (PdbPath, MAX_STR_LEN),
+                PdbPath
+                );
+
+  AsciiStrCpyS (
+                CurrentEventInfo->FunctionAddress,
+                AsciiStrnLenS (FunctionAddrOffset, MAX_STR_LEN),
+                FunctionAddrOffset
+                );
+
+  CurrentEventInfo->TimeInNanoSeconds = GetTimeInNanoSecond (GetPerformanceCounter ());
+  CurrentEventInfo->Tpl               = Event->NotifyTpl;
+  // other data: Event->EventGroup (guid), ...
+
   //
   // Debug statements for event info [VNK]
   //
-  // other data: Event->EventGroup (guid), ... 
-  StrCpyS (CurrentEventInfo->ImagePath, StrLen (PeCoffLoaderGetPdbPointer ((VOID *)PeCoffSearchImageBase ((UINTN)Event->NotifyFunction))) + 1, PeCoffLoaderGetPdbPointer ((VOID *)PeCoffSearchImageBase ((UINTN)Event->NotifyFunction)));
-  StrCpyS (CurrentEventInfo->FunctionAddress, StrLen (((UINTN)Event->NotifyFunction) - PeCoffSearchImageBase ((UINTN)Event->NotifyFunction)) + 1, ((UINTN)Event->NotifyFunction) - PeCoffSearchImageBase ((UINTN)Event->NotifyFunction));
-  // CloneString(PeCoffLoaderGetPdbPointer ((VOID *)PeCoffSearchImageBase ((UINTN)Event->NotifyFunction)));
-  // CurrentEventInfo.TimeInNanoSeconds = GetTimeInNanoSecond (GetPerformanceCounter ());
-  // CurrentEventInfo.Tpl = Event->NotifyTpl;
-
-
-  // DEBUG ((DEBUG_INFO, "%a:%d - Image Name: %a\n", __FUNCTION__, __LINE__, CurrentEventInfo.ImagePath));
-  // DEBUG ((DEBUG_INFO, "%a:%d - Function: 0x%llx - Image Address: 0x%llx = 0x%llx\n", __FUNCTION__, __LINE__, CurrentEventInfo.FunctionAddress));
-  // DEBUG ((DEBUG_INFO, "%a:%d - Time (Ns): %u\n", __FUNCTION__, __LINE__, CurrentEventInfo.TimeInNanoSeconds));
-  // DEBUG ((DEBUG_INFO, "%a:%d - Tpl: %u\n", __FUNCTION__, __LINE__, CurrentEventInfo.Tpl));            
-  // DEBUG ((DEBUG_INFO, "%a:%d - Event Group (GUID): %g\n", __FUNCTION__, __LINE__, Event->EventGroup));   
-
-  DEBUG ((DEBUG_INFO, "%a:%d - Tpl: %u\n", __FUNCTION__, __LINE__, Event->NotifyTpl));            
-
-  // Move cur event info pointer up 
-  // EventInfoBuffer[CurrentBufferI] = CurrentEventInfo;
-  // CurrentBufferI++;
-  // CurrentEventInfo = EventInfoBuffer[CurrentBufferI];
+  DEBUG ((DEBUG_INFO, "%a:%d - Image Name: %a\n", __FUNCTION__, __LINE__, CurrentEventInfo->ImagePath));
+  DEBUG ((DEBUG_INFO, "%a:%d - Function: 0x%llx - Image Address: 0x%llx = 0x%llx\n", __FUNCTION__, __LINE__, CurrentEventInfo->FunctionAddress));
+  DEBUG ((DEBUG_INFO, "%a:%d - Time (Ns): %u\n", __FUNCTION__, __LINE__, CurrentEventInfo->TimeInNanoSeconds));
+  DEBUG ((DEBUG_INFO, "%a:%d - Tpl: %u\n", __FUNCTION__, __LINE__, CurrentEventInfo->Tpl));
+  // DEBUG ((DEBUG_INFO, "%a:%d - Event Group (GUID): %g\n", __FUNCTION__, __LINE__, Event->EventGroup));
 
   //
   // Queue the event to the pending notification list
@@ -277,13 +289,14 @@ CoreNotifySignalList (
   IEVENT      *Event;
 
   //
-  // Create buffer for events in group 
+  // Create buffer for events in group
   //
-  UINTN BufferSize = EFI_PAGES_TO_SIZE(1);
-  EVENT_INFO *EventInfoBuffer = AllocateZeroPool(BufferSize); 
-  UINTN Size = sizeof(EVENT_INFO) + sizeof(VOID*);
-  EVENT_INFO *CurrentEventInfo = AllocateZeroPool(Size);
-  UINTN CurrentBufferIndex = 0;
+  UINTN       BufferSize         = EFI_PAGES_TO_SIZE (1);
+  EVENT_INFO  *EventInfoBuffer   = AllocateZeroPool (BufferSize);
+  UINTN       Size               = sizeof (EVENT_INFO) + sizeof (VOID *);
+  EVENT_INFO  *CurrentEventInfo  = AllocateZeroPool (Size);
+  UINTN       CurrentBufferIndex = 0;
+
   DEBUG ((DEBUG_INFO, "%a:%d - Event group: %g\n", __FUNCTION__, __LINE__, EventGroup));
 
   CoreAcquireEventLock ();
@@ -292,15 +305,18 @@ CoreNotifySignalList (
   for (Link = Head->ForwardLink; Link != Head; Link = Link->ForwardLink) {
     Event = CR (Link, IEVENT, SignalLink, EVENT_SIGNATURE);
     if (CompareGuid (&Event->EventGroup, EventGroup)) {
-      CoreNotifyEvent (Event, EventInfoBuffer, CurrentEventInfo, CurrentBufferIndex);
+      CoreNotifyEvent (Event, CurrentEventInfo);
+      // Copy EventInfo into buffer
+      CopyMem (&EventInfoBuffer[CurrentBufferIndex], CurrentEventInfo, sizeof (EVENT_INFO));
+      CurrentBufferIndex++;
+      CurrentEventInfo = &EventInfoBuffer[CurrentBufferIndex];
     }
   }
 
   CoreReleaseEventLock ();
-
+  // for bufferIndex, allocate pool, copy EventInfoBuffer[index], free
   // TODO copy events from buffer to global list
-  //InsertHeadList (&gEventInfoList, <>);
-
+  // InsertTailList (&gEventInfoList, event info instance);
 }
 
 /**
@@ -599,7 +615,7 @@ CoreSignalEvent (
         CoreNotifySignalList (&Event->EventGroup);
         CoreAcquireEventLock ();
       } else {
-        CoreNotifyEvent (Event, NULL, NULL, 0);
+        CoreNotifyEvent (Event, NULL);
       }
     }
   }
@@ -649,7 +665,7 @@ CoreCheckEvent (
     //
     CoreAcquireEventLock ();
     if (Event->SignalCount == 0) {
-      CoreNotifyEvent (Event, NULL, NULL, 0);
+      CoreNotifyEvent (Event, NULL);
     }
 
     CoreReleaseEventLock ();

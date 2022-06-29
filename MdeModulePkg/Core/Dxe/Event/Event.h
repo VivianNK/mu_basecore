@@ -23,8 +23,21 @@ extern  volatile UINTN  gEventPending;             // MS_CHANGE
 #define EVT_EXFLAG_EVENT_PROTOCOL_NOTIFICATION  0x02
 
 //
+#define MAX_STR_LEN  256
+
+//
 // EFI_EVENT
 //
+
+///
+/// Event Info [Debug] .
+///
+typedef struct {
+  CHAR8      ImagePath[MAX_STR_LEN];
+  CHAR8      FunctionAddress[16];
+  UINT64     TimeInNanoSeconds;
+  EFI_TPL    Tpl;                 // UINTN
+} EVENT_INFO;
 
 ///
 /// Timer event information
