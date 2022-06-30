@@ -240,18 +240,12 @@ CoreNotifyEvent (
   FunctionAddrOffset = NotifyFunctionPtr - ImageBase;
 
   // TODO if currenteventinfo is null (wrap code)
-
   AsciiStrCpyS (
                 CurrentEventInfo->ImagePath,
                 AsciiStrnLenS (PdbPath, MAX_STR_LEN),
                 PdbPath
                 );
-
-  AsciiStrCpyS (
-                CurrentEventInfo->FunctionAddress,
-                AsciiStrnLenS (FunctionAddrOffset, MAX_STR_LEN),
-                FunctionAddrOffset
-                );
+  sprintf (CurrentEventInfo->FunctionAddress, "%u", FunctionAddrOffset);
 
   CurrentEventInfo->TimeInNanoSeconds = GetTimeInNanoSecond (GetPerformanceCounter ());
   CurrentEventInfo->Tpl               = Event->NotifyTpl;
@@ -291,11 +285,11 @@ CoreNotifySignalList (
   //
   // Create buffer for events in group
   //
-  UINTN       BufferSize         = EFI_PAGES_TO_SIZE (1);
-  EVENT_INFO  *EventInfoBuffer   = AllocateZeroPool (BufferSize);
-  UINTN       Size               = sizeof (EVENT_INFO) + sizeof (VOID *);
-  EVENT_INFO  *CurrentEventInfo  = AllocateZeroPool (Size);
-  UINTN       CurrentBufferIndex = 0;
+  UINTN       BufferSize        = EFI_PAGES_TO_SIZE (1);
+  EVENT_INFO  *EventInfoBuffer  = AllocateZeroPool (BufferSize);
+  EVENT_INFO  *CurrentEventInfo = AllocateZeroPool (sizeof (EVENT_INFO));
+  EVENT_INFO  *SaveEventInfo;
+  UINTN       EventIndex = 0;
 
   DEBUG ((DEBUG_INFO, "%a:%d - Event group: %g\n", __FUNCTION__, __LINE__, EventGroup));
 
@@ -307,16 +301,23 @@ CoreNotifySignalList (
     if (CompareGuid (&Event->EventGroup, EventGroup)) {
       CoreNotifyEvent (Event, CurrentEventInfo);
       // Copy EventInfo into buffer
-      CopyMem (&EventInfoBuffer[CurrentBufferIndex], CurrentEventInfo, sizeof (EVENT_INFO));
-      CurrentBufferIndex++;
-      CurrentEventInfo = &EventInfoBuffer[CurrentBufferIndex];
+      CopyMem (&EventInfoBuffer[EventIndex], CurrentEventInfo, sizeof (EVENT_INFO));
+      EventIndex++;
+      CurrentEventInfo = &EventInfoBuffer[EventIndex];
     }
   }
 
   CoreReleaseEventLock ();
-  // for bufferIndex, allocate pool, copy EventInfoBuffer[index], free
-  // TODO copy events from buffer to global list
-  // InsertTailList (&gEventInfoList, event info instance);
+
+  // Copy events from buffer to global list
+  for (int i = 0; i < EventIndex; i++) {
+    SaveEventInfo = AllocateZeroPool (sizeof (EVENT_INFO));
+    CopyMem (SaveEventInfo, CurrentEventInfo, sizeof (EVENT_INFO));
+    InsertTailList (&gEventInfoList, &SaveEventInfo->Link);
+  }
+
+  FreePool (EventInfoBuffer);
+  FreePool (CurrentEventInfo);
 }
 
 /**
