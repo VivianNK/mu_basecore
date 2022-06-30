@@ -240,18 +240,17 @@ CoreNotifyEvent (
   PdbPath            = PeCoffLoaderGetPdbPointer ((VOID *)ImageBase);
   FunctionAddrOffset = NotifyFunctionPtr - ImageBase;
 
-  // TODO if currenteventinfo is null (wrap code)
+  // TODO if currenteventinfo is not null (wrap code)
   AsciiStrCpyS (
                 CurrentEventInfo->ImagePath,
                 AsciiStrnLenS (PdbPath, MAX_STR_LEN),
                 PdbPath
                 );
-  // sprintf (CurrentEventInfo->FunctionAddress, "%u", (unsigned int)FunctionAddrOffset);
+
   AsciiSPrint (CurrentEventInfo->FunctionAddress, sizeof (CurrentEventInfo->FunctionAddress), "%u", (unsigned int)FunctionAddrOffset);
 
   CurrentEventInfo->TimeInNanoSeconds = GetTimeInNanoSecond (GetPerformanceCounter ());
   CurrentEventInfo->Tpl               = Event->NotifyTpl;
-  // other data: Event->EventGroup (guid), ...
 
   //
   // Debug statements for event info [VNK]
@@ -259,7 +258,7 @@ CoreNotifyEvent (
   DEBUG ((DEBUG_INFO, "%a:%d - Image Name: %a\n", __FUNCTION__, __LINE__, CurrentEventInfo->ImagePath));
   DEBUG ((DEBUG_INFO, "%a:%d - Function: 0x%llx - Image Address: 0x%llx = 0x%llx\n", __FUNCTION__, __LINE__, CurrentEventInfo->FunctionAddress));
   DEBUG ((DEBUG_INFO, "%a:%d - Time (Ns): %u\n", __FUNCTION__, __LINE__, CurrentEventInfo->TimeInNanoSeconds));
-  DEBUG ((DEBUG_INFO, "%a:%d - Tpl: %u\n", __FUNCTION__, __LINE__, CurrentEventInfo->Tpl));
+  // DEBUG ((DEBUG_INFO, "%a:%d - Tpl: %u\n", __FUNCTION__, __LINE__, CurrentEventInfo->Tpl));
   // DEBUG ((DEBUG_INFO, "%a:%d - Event Group (GUID): %g\n", __FUNCTION__, __LINE__, Event->EventGroup));
 
   //
@@ -284,12 +283,14 @@ CoreNotifySignalList (
   LIST_ENTRY  *Head;
   IEVENT      *Event;
 
+  // todo check if allocation failed, if so it's too early to allocate memory, skip those steps/ set as null
+   
   //
   // Create buffer for events in group
   //
   UINTN  BufferSize = EFI_PAGES_TO_SIZE (1);
 
-  DEBUG ((DEBUG_INFO, "%a:%d - Before Allocation\n", __FUNCTION__, __LINE__));
+  DEBUG ((DEBUG_INFO, "%a:%d - xxBefore Allocation\n", __FUNCTION__, __LINE__));
   EVENT_INFO  *EventInfoBuffer = AllocateZeroPool (BufferSize);
 
   DEBUG ((DEBUG_INFO, "%a:%d - After EventInfoBuffer Allocation\n", __FUNCTION__, __LINE__));
