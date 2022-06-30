@@ -246,7 +246,8 @@ CoreNotifyEvent (
                 AsciiStrnLenS (PdbPath, MAX_STR_LEN),
                 PdbPath
                 );
-  sprintf (CurrentEventInfo->FunctionAddress, "%u", (unsigned int) FunctionAddrOffset);
+  // sprintf (CurrentEventInfo->FunctionAddress, "%u", (unsigned int)FunctionAddrOffset);
+  sprintf_s (CurrentEventInfo->FunctionAddress, sizeof (CurrentEventInfo->FunctionAddress), "%u", (unsigned int)FunctionAddrOffset);
 
   CurrentEventInfo->TimeInNanoSeconds = GetTimeInNanoSecond (GetPerformanceCounter ());
   CurrentEventInfo->Tpl               = Event->NotifyTpl;
