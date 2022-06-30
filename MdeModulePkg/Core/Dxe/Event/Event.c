@@ -9,7 +9,7 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 
 #include "DxeMain.h"
 #include "Event.h"
-#include <stdio.h>
+#include <Library/BasePrintLib/PrintLibInternal.h>
 
 ///
 /// gEfiCurrentTpl - Current Task priority level
@@ -247,7 +247,7 @@ CoreNotifyEvent (
                 PdbPath
                 );
   // sprintf (CurrentEventInfo->FunctionAddress, "%u", (unsigned int)FunctionAddrOffset);
-  sprintf_s (CurrentEventInfo->FunctionAddress, sizeof (CurrentEventInfo->FunctionAddress), "%u", (unsigned int)FunctionAddrOffset);
+  AsciiSPrint (CurrentEventInfo->FunctionAddress, sizeof (CurrentEventInfo->FunctionAddress), "%u", (unsigned int)FunctionAddrOffset);
 
   CurrentEventInfo->TimeInNanoSeconds = GetTimeInNanoSecond (GetPerformanceCounter ());
   CurrentEventInfo->Tpl               = Event->NotifyTpl;
@@ -287,9 +287,15 @@ CoreNotifySignalList (
   //
   // Create buffer for events in group
   //
-  UINTN       BufferSize        = EFI_PAGES_TO_SIZE (1);
-  EVENT_INFO  *EventInfoBuffer  = AllocateZeroPool (BufferSize);
+  UINTN  BufferSize = EFI_PAGES_TO_SIZE (1);
+
+  DEBUG ((DEBUG_INFO, "%a:%d - Before Allocation\n", __FUNCTION__, __LINE__));
+  EVENT_INFO  *EventInfoBuffer = AllocateZeroPool (BufferSize);
+
+  DEBUG ((DEBUG_INFO, "%a:%d - After EventInfoBuffer Allocation\n", __FUNCTION__, __LINE__));
   EVENT_INFO  *CurrentEventInfo = AllocateZeroPool (sizeof (EVENT_INFO));
+
+  DEBUG ((DEBUG_INFO, "%a:%d - After CurrentEventInfo Allocation\n", __FUNCTION__, __LINE__));
   EVENT_INFO  *SaveEventInfo;
   UINTN       EventIndex = 0;
 
