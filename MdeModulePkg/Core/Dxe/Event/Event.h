@@ -33,10 +33,11 @@ extern  volatile UINTN  gEventPending;             // MS_CHANGE
 /// Event Info [Debug] .
 ///
 typedef struct {
-  CHAR8      ImagePath[MAX_STR_LEN];
-  CHAR8      FunctionAddress[16];
-  UINT64     TimeInNanoSeconds;
-  EFI_TPL    Tpl;                 // UINTN
+  LIST_ENTRY    Link;
+  CHAR8         ImagePath[MAX_STR_LEN];
+  CHAR8         FunctionAddress[16];
+  UINT64        TimeInNanoSeconds;
+  EFI_TPL       Tpl;              // UINTN
 } EVENT_INFO;
 
 ///

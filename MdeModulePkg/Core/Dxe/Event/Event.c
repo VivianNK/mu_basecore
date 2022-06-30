@@ -9,6 +9,7 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 
 #include "DxeMain.h"
 #include "Event.h"
+#include <stdio.h>
 
 ///
 /// gEfiCurrentTpl - Current Task priority level
@@ -245,7 +246,7 @@ CoreNotifyEvent (
                 AsciiStrnLenS (PdbPath, MAX_STR_LEN),
                 PdbPath
                 );
-  sprintf (CurrentEventInfo->FunctionAddress, "%u", FunctionAddrOffset);
+  sprintf (CurrentEventInfo->FunctionAddress, "%u", (unsigned int) FunctionAddrOffset);
 
   CurrentEventInfo->TimeInNanoSeconds = GetTimeInNanoSecond (GetPerformanceCounter ());
   CurrentEventInfo->Tpl               = Event->NotifyTpl;
@@ -291,7 +292,7 @@ CoreNotifySignalList (
   EVENT_INFO  *SaveEventInfo;
   UINTN       EventIndex = 0;
 
-  DEBUG ((DEBUG_INFO, "%a:%d - Event group: %g\n", __FUNCTION__, __LINE__, EventGroup));
+  // DEBUG ((DEBUG_INFO, "%a:%d - Event group: %g\n", __FUNCTION__, __LINE__, EventGroup));
 
   CoreAcquireEventLock ();
 
