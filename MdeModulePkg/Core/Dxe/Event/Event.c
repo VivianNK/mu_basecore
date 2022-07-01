@@ -243,19 +243,16 @@ CoreNotifyEvent (
 
   // TODO if not null, print no memory for *event info*
   if (CurrentEventInfo != NULL) {
-    DEBUG ((DEBUG_INFO, "%a:%d - Current event info exists\n", __FUNCTION__, __LINE__));
-
     AsciiStrCpyS (
                   CurrentEventInfo->ImagePath,
                   AsciiStrnLenS (PdbPath, MAX_STR_LEN) + 1,
                   PdbPath
                   );
 
-    // Hah it was getting the length of the buffer which was 0 and copying nothing
     RetStatus = AsciiSPrint (
                              CurrentEventInfo->FunctionAddress,
                              MAX_STR_LEN_ADDR,
-                             "0x%11x",
+                             "0x%x",
                              FunctionAddrOffset
                              );
 
@@ -333,7 +330,6 @@ CoreNotifySignalList (
     if (CompareGuid (&Event->EventGroup, EventGroup)) {
       CoreNotifyEvent (Event, CurrentEventInfo);
       if (!allocationFails) {
-        DEBUG ((DEBUG_INFO, "%a:%d - Current event info exists\n", __FUNCTION__, __LINE__));
         // Copy EventInfo into buffer
         CopyMem (&EventInfoBuffer[EventIndex], CurrentEventInfo, sizeof (EVENT_INFO));
         EventIndex++;
@@ -346,10 +342,17 @@ CoreNotifySignalList (
 
   // Copy events from buffer to global list
   if (!allocationFails) {
-    DEBUG ((DEBUG_INFO, "%a:%d - Copying %u events\n", __FUNCTION__, __LINE__, EventIndex));
+    DEBUG ((DEBUG_INFO, "%a:%d - Copying %u event(s)\n", __FUNCTION__, __LINE__, EventIndex));
     for (int i = 0; i < EventIndex; i++) {
       SaveEventInfo = AllocateZeroPool (sizeof (EVENT_INFO));
-      CopyMem (SaveEventInfo, CurrentEventInfo, sizeof (EVENT_INFO));
+      if (SaveEventInfo == NULL) {
+        DEBUG ((DEBUG_INFO, "%a:%d - SaveEventInfo Allocation failed\n", __FUNCTION__, __LINE__));
+      } else {
+        DEBUG ((DEBUG_INFO, "%a:%d - SaveEventInfo Allocation succeeded\n", __FUNCTION__, __LINE__));
+      }
+
+      DEBUG ((DEBUG_INFO, "%a:%d - Copying %u event(s)\n", __FUNCTION__, __LINE__, EventIndex));
+      CopyMem (&SaveEventInfo, CurrentEventInfo, sizeof (EVENT_INFO));
       InsertTailList (&gEventInfoList, &SaveEventInfo->Link);
     }
 
