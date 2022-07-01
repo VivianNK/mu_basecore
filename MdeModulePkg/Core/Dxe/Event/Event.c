@@ -245,40 +245,34 @@ CoreNotifyEvent (
   if (CurrentEventInfo != NULL) {
     DEBUG ((DEBUG_INFO, "%a:%d - Current event info exists\n", __FUNCTION__, __LINE__));
 
-    RetStatus = AsciiStrCpyS (
-                              CurrentEventInfo->ImagePath,
-                              AsciiStrnLenS (PdbPath, MAX_STR_LEN),
-                              PdbPath
-                              );
+    AsciiStrCpyS (
+                  CurrentEventInfo->ImagePath,
+                  AsciiStrnLenS (PdbPath, MAX_STR_LEN) + 1,
+                  PdbPath
+                  );
 
-    // rn buffer not big enough
-    if (RetStatus != RETURN_SUCCESS) {
-      DEBUG ((DEBUG_INFO, "%a:%d - AsciiStrCpyS fail, errnum: %u. Path trying to copy: %a\n", __FUNCTION__, __LINE__, RetStatus, PdbPath));
-    } else {
-      DEBUG ((DEBUG_INFO, "%a:%d - AsciiStrCpyS success\n", __FUNCTION__, __LINE__));
-    }
-
-    // rn no data pending return ?
+    // now succeeding (changed sizeof to be of buff, not pointer) but... data is empty/not copied?
     RetStatus = AsciiSPrint (
                              CurrentEventInfo->FunctionAddress,
-                             sizeof (CurrentEventInfo->FunctionAddress),
-                             "%u",
+                             sizeof (*CurrentEventInfo->FunctionAddress),
+                             "0x%11x",
                              FunctionAddrOffset
                              );
-    CurrentEventInfo->TimeInNanoSeconds = GetTimeInNanoSecond (GetPerformanceCounter ());
-    CurrentEventInfo->Tpl               = Event->NotifyTpl;
 
     if (RetStatus != RETURN_SUCCESS) {
       DEBUG ((DEBUG_INFO, "%a:%d - AsciiSPrint fail, errnum: %u. Addr trying to copy:  0x%llx\n", __FUNCTION__, __LINE__, RetStatus, FunctionAddrOffset));
     } else {
-      DEBUG ((DEBUG_INFO, "%a:%d - AsciiSPrint success\n", __FUNCTION__, __LINE__));
+      DEBUG ((DEBUG_INFO, "%a:%d - AsciiSPrint success. Addr trying to copy: 0x%llx\n", __FUNCTION__, __LINE__, FunctionAddrOffset));
     }
+
+    CurrentEventInfo->TimeInNanoSeconds = GetTimeInNanoSecond (GetPerformanceCounter ());
+    CurrentEventInfo->Tpl               = Event->NotifyTpl;
 
     //
     // Debug statements for event info [VNK]
     //
-    DEBUG ((DEBUG_INFO, "%a:%d - Image Name: %s\n", __FUNCTION__, __LINE__, CurrentEventInfo->ImagePath));
-    DEBUG ((DEBUG_INFO, "%a:%d - Function: 0x%llx - Image Address: 0x%llx = 0x%llx\n", __FUNCTION__, __LINE__, NotifyFunctionPtr, ImageBase, CurrentEventInfo->FunctionAddress));
+    DEBUG ((DEBUG_INFO, "%a:%d - Image Name: %a\n", __FUNCTION__, __LINE__, CurrentEventInfo->ImagePath));
+    DEBUG ((DEBUG_INFO, "%a:%d - Function: 0x%llx - Image Address: 0x%llx = %a\n", __FUNCTION__, __LINE__, NotifyFunctionPtr, ImageBase, CurrentEventInfo->FunctionAddress));
     DEBUG ((DEBUG_INFO, "%a:%d - Time (Ns): %u\n", __FUNCTION__, __LINE__, CurrentEventInfo->TimeInNanoSeconds));
     // DEBUG ((DEBUG_INFO, "%a:%d - Tpl: %u\n", __FUNCTION__, __LINE__, CurrentEventInfo->Tpl));
     // DEBUG ((DEBUG_INFO, "%a:%d - Event Group (GUID): %g\n", __FUNCTION__, __LINE__, Event->EventGroup));
