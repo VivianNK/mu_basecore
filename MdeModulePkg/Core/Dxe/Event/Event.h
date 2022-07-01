@@ -25,6 +25,8 @@ extern  volatile UINTN  gEventPending;             // MS_CHANGE
 //
 #define MAX_STR_LEN  256
 
+#define MAX_STR_LEN_ADDR  16
+
 //
 // EFI_EVENT
 //

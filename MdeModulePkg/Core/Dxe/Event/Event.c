@@ -251,10 +251,10 @@ CoreNotifyEvent (
                   PdbPath
                   );
 
-    // now succeeding (changed sizeof to be of buff, not pointer) but... data is empty/not copied?
+    // Hah it was getting the length of the buffer which was 0 and copying nothing
     RetStatus = AsciiSPrint (
                              CurrentEventInfo->FunctionAddress,
-                             sizeof (*CurrentEventInfo->FunctionAddress),
+                             MAX_STR_LEN_ADDR,
                              "0x%11x",
                              FunctionAddrOffset
                              );
