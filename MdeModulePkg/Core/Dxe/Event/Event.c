@@ -219,6 +219,7 @@ CoreNotifyEvent (
   UINTN  NotifyFunctionPtr;
   UINTN  ImageBase;
   UINTN  FunctionAddrOffset;
+  UINTN  RetStatus;
 
   //
   // Event database must be locked
@@ -244,30 +245,48 @@ CoreNotifyEvent (
   if (CurrentEventInfo != NULL) {
     DEBUG ((DEBUG_INFO, "%a:%d - Current event info exists\n", __FUNCTION__, __LINE__));
 
-    AsciiStrCpyS (
-                  CurrentEventInfo->ImagePath,
-                  AsciiStrnLenS (PdbPath, MAX_STR_LEN),
-                  PdbPath
-                  );
-    AsciiSPrint (
-                 CurrentEventInfo->FunctionAddress,
-                 sizeof (CurrentEventInfo->FunctionAddress),
-                 "%u",
-                 (unsigned int)FunctionAddrOffset
-                 );
+    RetStatus = AsciiStrCpyS (
+                              CurrentEventInfo->ImagePath,
+                              AsciiStrnLenS (PdbPath, MAX_STR_LEN),
+                              PdbPath
+                              );
+
+    // rn buffer not big enough
+    if (RetStatus != RETURN_SUCCESS) {
+      DEBUG ((DEBUG_INFO, "%a:%d - AsciiStrCpyS fail, errnum: %u. Path trying to copy: %a\n", __FUNCTION__, __LINE__, RetStatus, PdbPath));
+    } else {
+      DEBUG ((DEBUG_INFO, "%a:%d - AsciiStrCpyS success\n", __FUNCTION__, __LINE__));
+    }
+
+    // rn no data pending return ?
+    RetStatus = AsciiSPrint (
+                             CurrentEventInfo->FunctionAddress,
+                             sizeof (CurrentEventInfo->FunctionAddress),
+                             "%u",
+                             FunctionAddrOffset
+                             );
     CurrentEventInfo->TimeInNanoSeconds = GetTimeInNanoSecond (GetPerformanceCounter ());
     CurrentEventInfo->Tpl               = Event->NotifyTpl;
+
+    if (RetStatus != RETURN_SUCCESS) {
+      DEBUG ((DEBUG_INFO, "%a:%d - AsciiSPrint fail, errnum: %u. Addr trying to copy:  0x%llx\n", __FUNCTION__, __LINE__, RetStatus, FunctionAddrOffset));
+    } else {
+      DEBUG ((DEBUG_INFO, "%a:%d - AsciiSPrint success\n", __FUNCTION__, __LINE__));
+    }
 
     //
     // Debug statements for event info [VNK]
     //
-    DEBUG ((DEBUG_INFO, "%a:%d - Image Name: %a\n", __FUNCTION__, __LINE__, CurrentEventInfo->ImagePath));
+    DEBUG ((DEBUG_INFO, "%a:%d - Image Name: %s\n", __FUNCTION__, __LINE__, CurrentEventInfo->ImagePath));
     DEBUG ((DEBUG_INFO, "%a:%d - Function: 0x%llx - Image Address: 0x%llx = 0x%llx\n", __FUNCTION__, __LINE__, NotifyFunctionPtr, ImageBase, CurrentEventInfo->FunctionAddress));
     DEBUG ((DEBUG_INFO, "%a:%d - Time (Ns): %u\n", __FUNCTION__, __LINE__, CurrentEventInfo->TimeInNanoSeconds));
     // DEBUG ((DEBUG_INFO, "%a:%d - Tpl: %u\n", __FUNCTION__, __LINE__, CurrentEventInfo->Tpl));
     // DEBUG ((DEBUG_INFO, "%a:%d - Event Group (GUID): %g\n", __FUNCTION__, __LINE__, Event->EventGroup));
   } else {
     DEBUG ((DEBUG_INFO, "%a:%d - Current event info is null\n", __FUNCTION__, __LINE__));
+    DEBUG ((DEBUG_INFO, "%a:%d - Image Name: %a\n", __FUNCTION__, __LINE__, PdbPath));
+    DEBUG ((DEBUG_INFO, "%a:%d - Function: 0x%llx - Image Address: 0x%llx = 0x%llx\n", __FUNCTION__, __LINE__, NotifyFunctionPtr, ImageBase, FunctionAddrOffset));
+    DEBUG ((DEBUG_INFO, "%a:%d - Time (Ns): %u\n", __FUNCTION__, __LINE__, GetTimeInNanoSecond (GetPerformanceCounter ())));
   }
 
   //
@@ -297,11 +316,18 @@ CoreNotifySignalList (
   //
   // Create buffer for events in group
   //
-  UINTN  BufferSize = EFI_PAGES_TO_SIZE (1);
+  UINTN       BufferSize        = EFI_PAGES_TO_SIZE (1);
+  BOOLEAN     allocationFails   = FALSE;
   EVENT_INFO  *EventInfoBuffer  = AllocateZeroPool (BufferSize);
   EVENT_INFO  *CurrentEventInfo = AllocateZeroPool (sizeof (EVENT_INFO));
   EVENT_INFO  *SaveEventInfo;
   UINTN       EventIndex = 0;
+
+  if (EventInfoBuffer == NULL) {
+    allocationFails = TRUE;
+  } else {
+    DEBUG ((DEBUG_INFO, "%a:%d - Allocation succeeded\n", __FUNCTION__, __LINE__));
+  }
 
   // DEBUG ((DEBUG_INFO, "%a:%d - Event group: %g\n", __FUNCTION__, __LINE__, EventGroup));
 
@@ -312,7 +338,7 @@ CoreNotifySignalList (
     Event = CR (Link, IEVENT, SignalLink, EVENT_SIGNATURE);
     if (CompareGuid (&Event->EventGroup, EventGroup)) {
       CoreNotifyEvent (Event, CurrentEventInfo);
-      if (EventInfoBuffer != NULL) {
+      if (!allocationFails) {
         DEBUG ((DEBUG_INFO, "%a:%d - Current event info exists\n", __FUNCTION__, __LINE__));
         // Copy EventInfo into buffer
         CopyMem (&EventInfoBuffer[EventIndex], CurrentEventInfo, sizeof (EVENT_INFO));
@@ -325,7 +351,8 @@ CoreNotifySignalList (
   CoreReleaseEventLock ();
 
   // Copy events from buffer to global list
-  if (EventInfoBuffer != NULL) {
+  if (!allocationFails) {
+    DEBUG ((DEBUG_INFO, "%a:%d - Copying %u events\n", __FUNCTION__, __LINE__, EventIndex));
     for (int i = 0; i < EventIndex; i++) {
       SaveEventInfo = AllocateZeroPool (sizeof (EVENT_INFO));
       CopyMem (SaveEventInfo, CurrentEventInfo, sizeof (EVENT_INFO));
