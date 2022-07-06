@@ -9,6 +9,7 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 
 #include "DxeMain.h"
 #include "Event.h"
+#include <Include/Library/PrintLib.h> // todo don't need this? was just vscode error maybe?
 #include <Library/BasePrintLib/PrintLibInternal.h>
 
 ///
@@ -136,13 +137,13 @@ CoreInitializeEventServices (
   CoreInitializeTimer ();
 
   CoreCreateEventEx (
-                     EVT_NOTIFY_SIGNAL,
-                     TPL_NOTIFY,
-                     EfiEventEmptyFunction,
-                     NULL,
-                     &gIdleLoopEventGuid,
-                     &gIdleLoopEvent
-                     );
+    EVT_NOTIFY_SIGNAL,
+    TPL_NOTIFY,
+    EfiEventEmptyFunction,
+    NULL,
+    &gIdleLoopEventGuid,
+    &gIdleLoopEvent
+    );
 
   return EFI_SUCCESS;
 }
@@ -219,7 +220,6 @@ CoreNotifyEvent (
   UINTN  NotifyFunctionPtr;
   UINTN  ImageBase;
   UINTN  FunctionAddrOffset;
-  UINTN  RetStatus;
 
   //
   // Event database must be locked
@@ -244,23 +244,17 @@ CoreNotifyEvent (
   // TODO if not null, print no memory for *event info*
   if (CurrentEventInfo != NULL) {
     AsciiStrCpyS (
-                  CurrentEventInfo->ImagePath,
-                  AsciiStrnLenS (PdbPath, MAX_STR_LEN) + 1,
-                  PdbPath
-                  );
+      CurrentEventInfo->ImagePath,
+      AsciiStrnLenS (PdbPath, MAX_STR_LEN) + 1,
+      PdbPath
+      );
 
-    RetStatus = AsciiSPrint (
-                             CurrentEventInfo->FunctionAddress,
-                             MAX_STR_LEN_ADDR,
-                             "0x%x",
-                             FunctionAddrOffset
-                             );
-
-    if (RetStatus != RETURN_SUCCESS) {
-      DEBUG ((DEBUG_INFO, "%a:%d - AsciiSPrint fail, errnum: %u. Addr trying to copy:  0x%llx\n", __FUNCTION__, __LINE__, RetStatus, FunctionAddrOffset));
-    } else {
-      DEBUG ((DEBUG_INFO, "%a:%d - AsciiSPrint success. Addr trying to copy: 0x%llx\n", __FUNCTION__, __LINE__, FunctionAddrOffset));
-    }
+    AsciiSPrint (
+      CurrentEventInfo->FunctionAddress,
+      MAX_STR_LEN_ADDR,
+      "0x%x",
+      FunctionAddrOffset
+      );
 
     CurrentEventInfo->TimeInNanoSeconds = GetTimeInNanoSecond (GetPerformanceCounter ());
     CurrentEventInfo->Tpl               = Event->NotifyTpl;
@@ -317,7 +311,7 @@ CoreNotifySignalList (
   if (EventInfoBuffer == NULL) {
     allocationFails = TRUE;
   } else {
-    DEBUG ((DEBUG_INFO, "%a:%d - Allocation succeeded\n", __FUNCTION__, __LINE__));
+    DEBUG ((DEBUG_INFO, "%a:%d - Buffer Allocation succeeded\n", __FUNCTION__, __LINE__));
   }
 
   // DEBUG ((DEBUG_INFO, "%a:%d - Event group: %g\n", __FUNCTION__, __LINE__, EventGroup));
@@ -342,7 +336,7 @@ CoreNotifySignalList (
 
   // Copy events from buffer to global list
   if (!allocationFails) {
-    DEBUG ((DEBUG_INFO, "%a:%d - Copying %u event(s)\n", __FUNCTION__, __LINE__, EventIndex));
+    DEBUG ((DEBUG_INFO, "%a:%d - %u event(s) to copy\n", __FUNCTION__, __LINE__, EventIndex));
     for (int i = 0; i < EventIndex; i++) {
       SaveEventInfo = AllocateZeroPool (sizeof (EVENT_INFO));
       if (SaveEventInfo == NULL) {
@@ -351,8 +345,9 @@ CoreNotifySignalList (
         DEBUG ((DEBUG_INFO, "%a:%d - SaveEventInfo Allocation succeeded\n", __FUNCTION__, __LINE__));
       }
 
-      DEBUG ((DEBUG_INFO, "%a:%d - Copying %u event(s)\n", __FUNCTION__, __LINE__, EventIndex));
-      CopyMem (&SaveEventInfo, CurrentEventInfo, sizeof (EVENT_INFO));
+      DEBUG ((DEBUG_INFO, "%a:%d - Copying %u event(s) with CopyMem\n", __FUNCTION__, __LINE__, EventIndex));
+      CopyMem (SaveEventInfo, CurrentEventInfo, sizeof (EVENT_INFO));
+      DEBUG ((DEBUG_INFO, "%a:%d - Copied events\n", __FUNCTION__, __LINE__, EventIndex));
       InsertTailList (&gEventInfoList, &SaveEventInfo->Link);
     }
 
