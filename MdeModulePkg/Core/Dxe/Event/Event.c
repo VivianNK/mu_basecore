@@ -268,10 +268,10 @@ CoreNotifyEvent (
     // DEBUG ((DEBUG_INFO, "%a:%d - Tpl: %u\n", __FUNCTION__, __LINE__, CurrentEventInfo->Tpl));
     // DEBUG ((DEBUG_INFO, "%a:%d - Event Group (GUID): %g\n", __FUNCTION__, __LINE__, Event->EventGroup));
   } else {
-    DEBUG ((DEBUG_INFO, "%a:%d - Current event info is null\n", __FUNCTION__, __LINE__));
+    // call was from other event - usually timer. 
+    //DEBUG ((DEBUG_INFO, "%a:%d - Current event info is null\n", __FUNCTION__, __LINE__));
     DEBUG ((DEBUG_INFO, "%a:%d - Image Name: %a\n", __FUNCTION__, __LINE__, PdbPath));
     DEBUG ((DEBUG_INFO, "%a:%d - Function: 0x%llx - Image Address: 0x%llx = 0x%llx\n", __FUNCTION__, __LINE__, NotifyFunctionPtr, ImageBase, FunctionAddrOffset));
-    DEBUG ((DEBUG_INFO, "%a:%d - Time (Ns): %u\n", __FUNCTION__, __LINE__, GetTimeInNanoSecond (GetPerformanceCounter ())));
   }
 
   //
@@ -301,10 +301,10 @@ CoreNotifySignalList (
   //
   // Create buffer for events in group
   //
-  UINTN       BufferSize        = EFI_PAGES_TO_SIZE (1);
-  BOOLEAN     allocationFails   = FALSE;
-  EVENT_INFO  *EventInfoBuffer  = AllocateZeroPool (BufferSize);
-  EVENT_INFO  *CurrentEventInfo = AllocateZeroPool (sizeof (EVENT_INFO));
+  UINTN       BufferSize       = EFI_PAGES_TO_SIZE (1);
+  BOOLEAN     allocationFails  = FALSE;
+  EVENT_INFO  *EventInfoBuffer = AllocateZeroPool (BufferSize);
+  EVENT_INFO  *CurrentEventInfo = &EventInfoBuffer[0]; // this is redundant but is more clear to me for rn
   EVENT_INFO  *SaveEventInfo;
   UINTN       EventIndex = 0;
 
@@ -324,8 +324,7 @@ CoreNotifySignalList (
     if (CompareGuid (&Event->EventGroup, EventGroup)) {
       CoreNotifyEvent (Event, CurrentEventInfo);
       if (!allocationFails) {
-        // Copy EventInfo into buffer
-        CopyMem (&EventInfoBuffer[EventIndex], CurrentEventInfo, sizeof (EVENT_INFO));
+        // Increment index into buffer and update CurrentEventInfo
         EventIndex++;
         CurrentEventInfo = &EventInfoBuffer[EventIndex];
       }
@@ -339,20 +338,14 @@ CoreNotifySignalList (
     DEBUG ((DEBUG_INFO, "%a:%d - %u event(s) to copy\n", __FUNCTION__, __LINE__, EventIndex));
     for (int i = 0; i < EventIndex; i++) {
       SaveEventInfo = AllocateZeroPool (sizeof (EVENT_INFO));
-      if (SaveEventInfo == NULL) {
-        DEBUG ((DEBUG_INFO, "%a:%d - SaveEventInfo Allocation failed\n", __FUNCTION__, __LINE__));
-      } else {
-        DEBUG ((DEBUG_INFO, "%a:%d - SaveEventInfo Allocation succeeded\n", __FUNCTION__, __LINE__));
-      }
-
-      DEBUG ((DEBUG_INFO, "%a:%d - Copying %u event(s) with CopyMem\n", __FUNCTION__, __LINE__, EventIndex));
-      CopyMem (SaveEventInfo, CurrentEventInfo, sizeof (EVENT_INFO));
-      DEBUG ((DEBUG_INFO, "%a:%d - Copied events\n", __FUNCTION__, __LINE__, EventIndex));
+      CopyMem (SaveEventInfo, &EventInfoBuffer[i], sizeof (EVENT_INFO));
+      DEBUG ((DEBUG_INFO, "%a:%d - Copied event\n", __FUNCTION__, __LINE__, EventIndex));
       InsertTailList (&gEventInfoList, &SaveEventInfo->Link);
+      DEBUG ((DEBUG_INFO, "%a:%d - event inserted into list\n", __FUNCTION__, __LINE__, EventIndex));
     }
 
     FreePool (EventInfoBuffer);
-    FreePool (CurrentEventInfo);
+    DEBUG ((DEBUG_INFO, "%a:%d - EventInfoBuffer pool freed\n", __FUNCTION__, __LINE__, EventIndex));
   }
 }
 
@@ -652,6 +645,8 @@ CoreSignalEvent (
         CoreNotifySignalList (&Event->EventGroup);
         CoreAcquireEventLock ();
       } else {
+        DEBUG ((DEBUG_INFO, "%a:%d - Calling from CoreSignalEvent\n", __FUNCTION__, __LINE__));
+        // todo print when this is happening and dump event info - how many times is this called?
         CoreNotifyEvent (Event, NULL);
       }
     }
@@ -702,6 +697,7 @@ CoreCheckEvent (
     //
     CoreAcquireEventLock ();
     if (Event->SignalCount == 0) {
+      DEBUG ((DEBUG_INFO, "%a:%d - Calling from CoreCheckEvent\n", __FUNCTION__, __LINE__));
       CoreNotifyEvent (Event, NULL);
     }
 
