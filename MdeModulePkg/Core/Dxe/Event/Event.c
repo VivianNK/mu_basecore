@@ -259,9 +259,9 @@ CoreNotifyEvent (
     CurrentEventInfo->TimeInNanoSeconds = GetTimeInNanoSecond (GetPerformanceCounter ());
     CurrentEventInfo->Tpl               = Event->NotifyTpl;
   } else {
-    DEBUG ((DEBUG_INFO, "%a:%d - Image Name: %a\n", __FUNCTION__, __LINE__, CurrentEventInfo->ImagePath));
-    DEBUG ((DEBUG_INFO, "%a:%d - func - imgaddr = %a\n", __FUNCTION__, __LINE__, CurrentEventInfo->FunctionAddress));
-    DEBUG ((DEBUG_INFO, "%a:%d - Time (Ns): %u\n", __FUNCTION__, __LINE__, CurrentEventInfo->TimeInNanoSeconds));
+    DEBUG ((DEBUG_INFO, "%a:%d - Image Name: %a\n", __FUNCTION__, __LINE__, PdbPath));
+    DEBUG ((DEBUG_INFO, "%a:%d - Function Address Offset: 0x%11x\n", __FUNCTION__, __LINE__, FunctionAddrOffset));
+    DEBUG ((DEBUG_INFO, "%a:%d - Time (Ns): %u\n", __FUNCTION__, __LINE__, GetTimeInNanoSecond (GetPerformanceCounter ())));
   }
 
   //
