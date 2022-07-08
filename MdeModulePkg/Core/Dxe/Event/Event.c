@@ -258,20 +258,10 @@ CoreNotifyEvent (
 
     CurrentEventInfo->TimeInNanoSeconds = GetTimeInNanoSecond (GetPerformanceCounter ());
     CurrentEventInfo->Tpl               = Event->NotifyTpl;
-
-    //
-    // Debug statements for event info [VNK]
-    //
-    DEBUG ((DEBUG_INFO, "%a:%d - Image Name: %a\n", __FUNCTION__, __LINE__, CurrentEventInfo->ImagePath));
-    DEBUG ((DEBUG_INFO, "%a:%d - Function: 0x%llx - Image Address: 0x%llx = %a\n", __FUNCTION__, __LINE__, NotifyFunctionPtr, ImageBase, CurrentEventInfo->FunctionAddress));
-    DEBUG ((DEBUG_INFO, "%a:%d - Time (Ns): %u\n", __FUNCTION__, __LINE__, CurrentEventInfo->TimeInNanoSeconds));
-    // DEBUG ((DEBUG_INFO, "%a:%d - Tpl: %u\n", __FUNCTION__, __LINE__, CurrentEventInfo->Tpl));
-    // DEBUG ((DEBUG_INFO, "%a:%d - Event Group (GUID): %g\n", __FUNCTION__, __LINE__, Event->EventGroup));
   } else {
-    // call was from other event - usually timer. 
-    //DEBUG ((DEBUG_INFO, "%a:%d - Current event info is null\n", __FUNCTION__, __LINE__));
-    DEBUG ((DEBUG_INFO, "%a:%d - Image Name: %a\n", __FUNCTION__, __LINE__, PdbPath));
-    DEBUG ((DEBUG_INFO, "%a:%d - Function: 0x%llx - Image Address: 0x%llx = 0x%llx\n", __FUNCTION__, __LINE__, NotifyFunctionPtr, ImageBase, FunctionAddrOffset));
+    DEBUG ((DEBUG_INFO, "%a:%d - Image Name: %a\n", __FUNCTION__, __LINE__, CurrentEventInfo->ImagePath));
+    DEBUG ((DEBUG_INFO, "%a:%d - func - imgaddr = %a\n", __FUNCTION__, __LINE__, CurrentEventInfo->FunctionAddress));
+    DEBUG ((DEBUG_INFO, "%a:%d - Time (Ns): %u\n", __FUNCTION__, __LINE__, CurrentEventInfo->TimeInNanoSeconds));
   }
 
   //
@@ -296,18 +286,17 @@ CoreNotifySignalList (
   LIST_ENTRY  *Head;
   IEVENT      *Event;
 
-  // todo check if allocation failed, if so it's too early to allocate memory, skip those steps/ set as null
-
   //
   // Create buffer for events in group
   //
-  UINTN       BufferSize       = EFI_PAGES_TO_SIZE (1);
-  BOOLEAN     allocationFails  = FALSE;
-  EVENT_INFO  *EventInfoBuffer = AllocateZeroPool (BufferSize);
+  UINTN       BufferSize        = EFI_PAGES_TO_SIZE (1);
+  BOOLEAN     allocationFails   = FALSE;
+  EVENT_INFO  *EventInfoBuffer  = AllocateZeroPool (BufferSize);
   EVENT_INFO  *CurrentEventInfo = &EventInfoBuffer[0]; // this is redundant but is more clear to me for rn
   EVENT_INFO  *SaveEventInfo;
   UINTN       EventIndex = 0;
 
+  // check if allocation failed, if so it's too early to allocate memory, skip event info auditing
   if (EventInfoBuffer == NULL) {
     allocationFails = TRUE;
   } else {
@@ -339,13 +328,15 @@ CoreNotifySignalList (
     for (int i = 0; i < EventIndex; i++) {
       SaveEventInfo = AllocateZeroPool (sizeof (EVENT_INFO));
       CopyMem (SaveEventInfo, &EventInfoBuffer[i], sizeof (EVENT_INFO));
-      DEBUG ((DEBUG_INFO, "%a:%d - Copied event\n", __FUNCTION__, __LINE__, EventIndex));
+      // DEBUG ((DEBUG_INFO, "%a:%d - Copied event\n", __FUNCTION__, __LINE__));
+      // DEBUG ((DEBUG_INFO, "%a:%d - Image Name: %a\n", __FUNCTION__, __LINE__, SaveEventInfo->ImagePath));
+      // DEBUG ((DEBUG_INFO, "%a:%d - func - imgaddr = %a\n", __FUNCTION__, __LINE__, SaveEventInfo->FunctionAddress));
+      // DEBUG ((DEBUG_INFO, "%a:%d - Time (Ns): %u\n", __FUNCTION__, __LINE__, SaveEventInfo->TimeInNanoSeconds));
+      // DEBUG ((DEBUG_INFO, "%a:%d - Tpl: %u\n", __FUNCTION__, __LINE__, SaveEventInfo->Tpl));
       InsertTailList (&gEventInfoList, &SaveEventInfo->Link);
-      DEBUG ((DEBUG_INFO, "%a:%d - event inserted into list\n", __FUNCTION__, __LINE__, EventIndex));
     }
 
     FreePool (EventInfoBuffer);
-    DEBUG ((DEBUG_INFO, "%a:%d - EventInfoBuffer pool freed\n", __FUNCTION__, __LINE__, EventIndex));
   }
 }
 
@@ -645,8 +636,7 @@ CoreSignalEvent (
         CoreNotifySignalList (&Event->EventGroup);
         CoreAcquireEventLock ();
       } else {
-        DEBUG ((DEBUG_INFO, "%a:%d - Calling from CoreSignalEvent\n", __FUNCTION__, __LINE__));
-        // todo print when this is happening and dump event info - how many times is this called?
+        // DEBUG ((DEBUG_INFO, "%a:%d - Calling from CoreSignalEvent\n", __FUNCTION__, __LINE__));
         CoreNotifyEvent (Event, NULL);
       }
     }
@@ -697,7 +687,7 @@ CoreCheckEvent (
     //
     CoreAcquireEventLock ();
     if (Event->SignalCount == 0) {
-      DEBUG ((DEBUG_INFO, "%a:%d - Calling from CoreCheckEvent\n", __FUNCTION__, __LINE__));
+      // DEBUG ((DEBUG_INFO, "%a:%d - Calling from CoreCheckEvent\n", __FUNCTION__, __LINE__));
       CoreNotifyEvent (Event, NULL);
     }
 
@@ -705,7 +695,7 @@ CoreCheckEvent (
   }
 
   //
-  // If the even looks signalled, get the lock and clear it
+  // If the event looks signalled, get the lock and clear it
   //
 
   if (Event->SignalCount != 0) {
