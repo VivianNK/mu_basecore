@@ -40,7 +40,8 @@ LIST_ENTRY  gEventSignalQueue = INITIALIZE_LIST_HEAD_VARIABLE (gEventSignalQueue
 ///
 /// gEventTable - A list of events fired of EVENT_INFO type [vnk]
 ///
-LIST_ENTRY  gEventInfoList = INITIALIZE_LIST_HEAD_VARIABLE (gEventInfoList);
+LIST_ENTRY  gEventInfoList       = INITIALIZE_LIST_HEAD_VARIABLE (gEventInfoList);
+UINTN       gEventInfoNumEntries = 0;
 
 ///
 /// Enumerate the valid types
@@ -92,6 +93,11 @@ UINT32  mEventTable[] = {
 /// gIdleLoopEvent - Event which is signalled when the core is idle
 ///
 EFI_EVENT  gIdleLoopEvent = NULL;
+
+STATIC EVENT_AUDIT_PROTOCOL  mEventAudit = {
+  &gEventInfoList,
+  &gEventInfoNumEntries
+};
 
 /**
   Enter critical section by acquiring the lock on gEventQueueLock.
@@ -334,6 +340,7 @@ CoreNotifySignalList (
       // DEBUG ((DEBUG_INFO, "%a:%d - Time (Ns): %u\n", __FUNCTION__, __LINE__, SaveEventInfo->TimeInNanoSeconds));
       // DEBUG ((DEBUG_INFO, "%a:%d - Tpl: %u\n", __FUNCTION__, __LINE__, SaveEventInfo->Tpl));
       InsertTailList (&gEventInfoList, &SaveEventInfo->Link);
+      gEventInfoNumEntries++;
     }
 
     FreePool (EventInfoBuffer);

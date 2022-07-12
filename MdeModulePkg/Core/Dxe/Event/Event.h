@@ -32,7 +32,7 @@ extern  volatile UINTN  gEventPending;             // MS_CHANGE
 //
 
 ///
-/// Event Info [Debug] .
+/// Event Info
 ///
 typedef struct {
   LIST_ENTRY    Link;
@@ -41,6 +41,15 @@ typedef struct {
   UINT64        TimeInNanoSeconds;
   EFI_TPL       Tpl;              // UINTN
 } EVENT_INFO;
+
+///
+/// Event Audit Protocol (list of EVENT_INFO)
+///
+typedef struct {
+  LIST_ENTRY    gEventInfoList;
+} _EVENT_AUDIT_PROTOCOL;
+
+typedef _EVENT_AUDIT_PROTOCOL EVENT_AUDIT_PROTOCOL;
 
 ///
 /// Timer event information
