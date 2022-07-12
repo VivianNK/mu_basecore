@@ -22,19 +22,23 @@ extern  volatile UINTN  gEventPending;             // MS_CHANGE
 ///
 #define EVT_EXFLAG_EVENT_PROTOCOL_NOTIFICATION  0x02
 
-//
-#define MAX_STR_LEN  256
-
+///
+/// Max string lengths
+///
+#define MAX_STR_LEN       256
 #define MAX_STR_LEN_ADDR  16
 
 //
 // EFI_EVENT
 //
 
+#define EVENT_INFO_SIGNATURE  SIGNATURE_32 ('E','V','I','N')
+
 ///
 /// Event Info
 ///
 typedef struct {
+  UINT32        Signature;
   LIST_ENTRY    Link;
   CHAR8         ImagePath[MAX_STR_LEN];
   CHAR8         FunctionAddress[16];
@@ -47,6 +51,7 @@ typedef struct {
 ///
 typedef struct {
   LIST_ENTRY    gEventInfoList;
+  UINTN         *NumberOfEntries;
 } _EVENT_AUDIT_PROTOCOL;
 
 typedef _EVENT_AUDIT_PROTOCOL EVENT_AUDIT_PROTOCOL;
