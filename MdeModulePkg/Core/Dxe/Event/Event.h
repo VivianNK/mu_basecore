@@ -50,7 +50,7 @@ typedef struct {
 /// Event Audit Protocol (list of EVENT_INFO)
 ///
 typedef struct {
-  LIST_ENTRY    gEventInfoList;
+  LIST_ENTRY    *gEventInfoList;
   UINTN         *NumberOfEntries;
 } _EVENT_AUDIT_PROTOCOL;
 

@@ -95,8 +95,8 @@ UINT32  mEventTable[] = {
 EFI_EVENT  gIdleLoopEvent = NULL;
 
 STATIC EVENT_AUDIT_PROTOCOL  mEventAudit = {
-  &gEventInfoList,
-  &gEventInfoNumEntries
+  .gEventInfoList  = &gEventInfoList,
+  .NumberOfEntries = &gEventInfoNumEntries
 };
 
 /**
@@ -335,10 +335,10 @@ CoreNotifySignalList (
       SaveEventInfo = AllocateZeroPool (sizeof (EVENT_INFO));
       CopyMem (SaveEventInfo, &EventInfoBuffer[i], sizeof (EVENT_INFO));
       // DEBUG ((DEBUG_INFO, "%a:%d - Copied event\n", __FUNCTION__, __LINE__));
-      // DEBUG ((DEBUG_INFO, "%a:%d - Image Name: %a\n", __FUNCTION__, __LINE__, SaveEventInfo->ImagePath));
-      // DEBUG ((DEBUG_INFO, "%a:%d - func - imgaddr = %a\n", __FUNCTION__, __LINE__, SaveEventInfo->FunctionAddress));
-      // DEBUG ((DEBUG_INFO, "%a:%d - Time (Ns): %u\n", __FUNCTION__, __LINE__, SaveEventInfo->TimeInNanoSeconds));
-      // DEBUG ((DEBUG_INFO, "%a:%d - Tpl: %u\n", __FUNCTION__, __LINE__, SaveEventInfo->Tpl));
+      DEBUG ((DEBUG_INFO, "%a:%d - Image Name: %a\n", __FUNCTION__, __LINE__, SaveEventInfo->ImagePath));
+      DEBUG ((DEBUG_INFO, "%a:%d - func - imgaddr = %a\n", __FUNCTION__, __LINE__, SaveEventInfo->FunctionAddress));
+      DEBUG ((DEBUG_INFO, "%a:%d - Time (Ns): %u\n", __FUNCTION__, __LINE__, SaveEventInfo->TimeInNanoSeconds));
+      DEBUG ((DEBUG_INFO, "%a:%d - Tpl: %u\n", __FUNCTION__, __LINE__, SaveEventInfo->Tpl));
       InsertTailList (&gEventInfoList, &SaveEventInfo->Link);
       gEventInfoNumEntries++;
     }
