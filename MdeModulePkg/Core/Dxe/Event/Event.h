@@ -10,6 +10,8 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 #ifndef __EVENT_H__
 #define __EVENT_H__
 
+#include <Protocol/EventAudit.h>
+
 #define VALID_TPL(a)  ((a) <= TPL_HIGH_LEVEL)
 extern  volatile UINTN  gEventPending;             // MS_CHANGE
 
@@ -21,40 +23,6 @@ extern  volatile UINTN  gEventPending;             // MS_CHANGE
 /// Set if Event is registered on a protocol notify
 ///
 #define EVT_EXFLAG_EVENT_PROTOCOL_NOTIFICATION  0x02
-
-///
-/// Max string lengths
-///
-#define MAX_STR_LEN       256
-#define MAX_STR_LEN_ADDR  16
-
-//
-// EFI_EVENT
-//
-
-#define EVENT_INFO_SIGNATURE  SIGNATURE_32 ('E','V','I','N')
-
-///
-/// Event Info
-///
-typedef struct {
-  UINT32        Signature;
-  LIST_ENTRY    Link;
-  CHAR8         ImagePath[MAX_STR_LEN];
-  CHAR8         FunctionAddress[16];
-  UINT64        TimeInNanoSeconds;
-  EFI_TPL       Tpl;              // UINTN
-} EVENT_INFO;
-
-///
-/// Event Audit Protocol (list of EVENT_INFO)
-///
-typedef struct {
-  LIST_ENTRY    *gEventInfoList;
-  UINTN         *NumberOfEntries;
-} _EVENT_AUDIT_PROTOCOL;
-
-typedef _EVENT_AUDIT_PROTOCOL EVENT_AUDIT_PROTOCOL;
 
 ///
 /// Timer event information

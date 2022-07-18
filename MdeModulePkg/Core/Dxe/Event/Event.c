@@ -135,6 +135,8 @@ CoreInitializeEventServices (
   )
 {
   UINTN  Index;
+  EFI_STATUS Status;
+  EFI_HANDLE EvAuHandle = NULL;
 
   for (Index = 0; Index <= TPL_HIGH_LEVEL; Index++) {
     InitializeListHead (&gEventQueue[Index]);
@@ -150,6 +152,15 @@ CoreInitializeEventServices (
     &gIdleLoopEventGuid,
     &gIdleLoopEvent
     );
+
+  Status = gBS->InstallProtocolInterface (
+                  &EvAuHandle,
+                  &gEventAuditProtocolGuid,
+                  EFI_NATIVE_INTERFACE,
+                  &mEventAudit
+                  );
+
+  DEBUG ((DEBUG_INFO, "Installed gEventAuditProtocolGuid - %r\n", Status));
 
   return EFI_SUCCESS;
 }
@@ -265,9 +276,9 @@ CoreNotifyEvent (
     CurrentEventInfo->TimeInNanoSeconds = GetTimeInNanoSecond (GetPerformanceCounter ());
     CurrentEventInfo->Tpl               = Event->NotifyTpl;
   } else {
-    DEBUG ((DEBUG_INFO, "%a:%d - Image Name: %a\n", __FUNCTION__, __LINE__, PdbPath));
-    DEBUG ((DEBUG_INFO, "%a:%d - Function Address Offset: 0x%11x\n", __FUNCTION__, __LINE__, FunctionAddrOffset));
-    DEBUG ((DEBUG_INFO, "%a:%d - Time (Ns): %u\n", __FUNCTION__, __LINE__, GetTimeInNanoSecond (GetPerformanceCounter ())));
+    // DEBUG ((DEBUG_INFO, "%a:%d - Image Name: %a\n", __FUNCTION__, __LINE__, PdbPath));
+    // DEBUG ((DEBUG_INFO, "%a:%d - Function Address Offset: 0x%11x\n", __FUNCTION__, __LINE__, FunctionAddrOffset));
+    // DEBUG ((DEBUG_INFO, "%a:%d - Time (Ns): %u\n", __FUNCTION__, __LINE__, GetTimeInNanoSecond (GetPerformanceCounter ())));
   }
 
   //
@@ -335,10 +346,10 @@ CoreNotifySignalList (
       SaveEventInfo = AllocateZeroPool (sizeof (EVENT_INFO));
       CopyMem (SaveEventInfo, &EventInfoBuffer[i], sizeof (EVENT_INFO));
       // DEBUG ((DEBUG_INFO, "%a:%d - Copied event\n", __FUNCTION__, __LINE__));
-      DEBUG ((DEBUG_INFO, "%a:%d - Image Name: %a\n", __FUNCTION__, __LINE__, SaveEventInfo->ImagePath));
-      DEBUG ((DEBUG_INFO, "%a:%d - func - imgaddr = %a\n", __FUNCTION__, __LINE__, SaveEventInfo->FunctionAddress));
-      DEBUG ((DEBUG_INFO, "%a:%d - Time (Ns): %u\n", __FUNCTION__, __LINE__, SaveEventInfo->TimeInNanoSeconds));
-      DEBUG ((DEBUG_INFO, "%a:%d - Tpl: %u\n", __FUNCTION__, __LINE__, SaveEventInfo->Tpl));
+      // DEBUG ((DEBUG_INFO, "%a:%d - Image Name: %a\n", __FUNCTION__, __LINE__, SaveEventInfo->ImagePath));
+      // DEBUG ((DEBUG_INFO, "%a:%d - func - imgaddr = %a\n", __FUNCTION__, __LINE__, SaveEventInfo->FunctionAddress));
+      // DEBUG ((DEBUG_INFO, "%a:%d - Time (Ns): %u\n", __FUNCTION__, __LINE__, SaveEventInfo->TimeInNanoSeconds));
+      // DEBUG ((DEBUG_INFO, "%a:%d - Tpl: %u\n", __FUNCTION__, __LINE__, SaveEventInfo->Tpl));
       InsertTailList (&gEventInfoList, &SaveEventInfo->Link);
       gEventInfoNumEntries++;
     }

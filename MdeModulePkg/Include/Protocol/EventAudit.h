@@ -23,7 +23,11 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 #include <Library/DebugLib.h>
 #include <Library/MemoryAllocationLib.h>
 
-#define MAX_STR_LEN  256
+///
+/// Max string lengths
+///
+#define MAX_STR_LEN       256
+#define MAX_STR_LEN_ADDR  16
 
 #define EVENT_AUDIT_PROTOCOL_GUID \
   { \
@@ -32,8 +36,6 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 
 #define EVENT_INFO_SIGNATURE  SIGNATURE_32 ('E','V','I','N')
 
-// TODO: consolidate with struct definition from Event.h
-
 ///
 /// Event Info
 ///
@@ -41,14 +43,17 @@ typedef struct {
   UINT32        Signature;
   LIST_ENTRY    Link;
   CHAR8         ImagePath[MAX_STR_LEN];
-  CHAR8         FunctionAddress[16];
+  CHAR8         FunctionAddress[MAX_STR_LEN_ADDR];
   UINT64        TimeInNanoSeconds;
   EFI_TPL       Tpl;              // UINTN
 } EVENT_INFO;
 
+///
+/// Event Audit Protocol (list of EVENT_INFO)
+///
 typedef struct {
-  LIST_ENTRY    gEventInfoList;
-  UINTN         NumberOfEntries;
+  LIST_ENTRY    *gEventInfoList;
+  UINTN         *NumberOfEntries;
 } _EVENT_AUDIT_PROTOCOL;
 
 typedef _EVENT_AUDIT_PROTOCOL EVENT_AUDIT_PROTOCOL;
