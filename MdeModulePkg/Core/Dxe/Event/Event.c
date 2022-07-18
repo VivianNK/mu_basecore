@@ -345,6 +345,7 @@ CoreNotifySignalList (
     for (int i = 0; i < EventIndex; i++) {
       SaveEventInfo = AllocateZeroPool (sizeof (EVENT_INFO));
       CopyMem (SaveEventInfo, &EventInfoBuffer[i], sizeof (EVENT_INFO));
+      SaveEventInfo->Signature = EVENT_INFO_SIGNATURE;
       // DEBUG ((DEBUG_INFO, "%a:%d - Copied event\n", __FUNCTION__, __LINE__));
       // DEBUG ((DEBUG_INFO, "%a:%d - Image Name: %a\n", __FUNCTION__, __LINE__, SaveEventInfo->ImagePath));
       // DEBUG ((DEBUG_INFO, "%a:%d - func - imgaddr = %a\n", __FUNCTION__, __LINE__, SaveEventInfo->FunctionAddress));
