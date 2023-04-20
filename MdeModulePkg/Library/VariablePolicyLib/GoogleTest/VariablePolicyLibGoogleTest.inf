@@ -1,0 +1,33 @@
+## @file
+# Unit test suite for the SecureBootVariableLib using Google Test
+#
+# Copyright (c) 2022, Intel Corporation. All rights reserved.
+# SPDX-License-Identifier: BSD-2-Clause-Patent
+##
+
+[Defines]
+  INF_VERSION         = 0x00010017
+  BASE_NAME           = VariablePolicyLibGoogleTest
+  FILE_GUID           = AEC10364-45A8-44DF-85C1-CD6DC26B457F
+  VERSION_STRING      = 1.0
+  MODULE_TYPE         = HOST_APPLICATION
+
+#
+# The following information is for reference only and not required by the build tools.
+#
+#  VALID_ARCHITECTURES           = IA32 X64
+#
+
+[Sources]
+  VariablePolicyLibGoogleTest.cpp
+
+[Packages]
+  MdePkg/MdePkg.dec
+  MdeModulePkg/MdeModulePkg.dec
+  UnitTestFrameworkPkg/UnitTestFrameworkPkg.dec
+
+[LibraryClasses]
+  GoogleTestLib
+  VariablePolicyLib
+  BaseLib
+  DebugLib

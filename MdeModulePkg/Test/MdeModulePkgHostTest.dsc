@@ -97,6 +97,16 @@
       gEfiMdeModulePkgTokenSpaceGuid.PcdAllowVariablePolicyEnforcementDisable|TRUE
   }
 
+  MdeModulePkg/Library/VariablePolicyLib/GoogleTest/VariablePolicyLibGoogleTest.inf {
+    <LibraryClasses>
+      VariablePolicyLib|MdeModulePkg/Library/VariablePolicyLib/VariablePolicyLib.inf
+      DevicePathLib|MdePkg/Library/UefiDevicePathLib/UefiDevicePathLib.inf #Todo will we need this?
+      UefiRuntimeServicesTableLib|MdePkg/Test/Mock/Library/GoogleTest/MockUefiRuntimeServicesTableLib/MockUefiRuntimeServicesTableLib.inf
+      UefiLib|MdePkg/Test/Mock/Library/GoogleTest/MockUefiLib/MockUefiLib.inf
+      #  Temporarily fixing a regression due to recent change in UnitTestFrameworkPkgHost.dsc.inc
+      UefiBootServicesTableLib|UnitTestFrameworkPkg/Library/UnitTestUefiBootServicesTableLib/UnitTestUefiBootServicesTableLib.inf
+  }
+
   MdeModulePkg/Core/Dxe/UnitTest/MemoryProtectionUnitTestHost.inf {
     <LibraryClasses>
       HobLib|MdeModulePkg/Library/BaseHobLibNull/BaseHobLibNull.inf
