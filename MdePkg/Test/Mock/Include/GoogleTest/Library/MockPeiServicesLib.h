@@ -30,10 +30,22 @@ struct MockPeiServicesLib {
     );
 
   // EFI_API from MdePkg/Include/Ppi/ReadOnlyVariable2.h
-  // TODO, question: Also in MdeModulePkg/Universal/Variable/Pei/Variable.c ?
+  // // TODO, question: Also in MdeModulePkg/Universal/Variable/Pei/Variable.c ?
+  // MOCK_FUNCTION_DECLARATION (
+  //   EFI_STATUS,
+  //   PeiGetVariable,
+  //   (IN CONST  EFI_PEI_READ_ONLY_VARIABLE2_PPI  *This,
+  //    IN CONST  CHAR16                           *VariableName,
+  //    IN CONST  EFI_GUID                         *VariableGuid,
+  //    OUT       UINT32                           *Attributes,
+  //    IN OUT    UINTN                            *DataSize,
+  //    OUT       VOID                             *Data OPTIONAL)
+  //   );
+
+  // 
   MOCK_FUNCTION_DECLARATION (
     EFI_STATUS,
-    PeiGetVariable,
+    pei_GetVariable,
     (IN CONST  EFI_PEI_READ_ONLY_VARIABLE2_PPI  *This,
      IN CONST  CHAR16                           *VariableName,
      IN CONST  EFI_GUID                         *VariableGuid,
