@@ -10,12 +10,22 @@
 
 #include <Library/GoogleTestLib.h>
 #include <Library/FunctionMockLib.h>
+
+// TODO do I need this extern C for a header file?
 extern "C" {
   #include <Uefi.h>
   #include <Pi/PiPeiCis.h>
   #include <Library/PeiServicesLib.h>
   #include <Ppi/ReadOnlyVariable2.h>
 }
+
+#include <Uefi.h>
+
+typedef struct _PPI_STATUS {
+  VOID          *Ppi;
+  EFI_STATUS    Status;
+} PPI_STATUS;
+
 
 struct MockPeiServicesLib {
   MOCK_INTERFACE_DECLARATION (MockPeiServicesLib);
@@ -31,18 +41,6 @@ struct MockPeiServicesLib {
 
   // EFI_API from MdePkg/Include/Ppi/ReadOnlyVariable2.h
   // // TODO, question: Also in MdeModulePkg/Universal/Variable/Pei/Variable.c ?
-  // MOCK_FUNCTION_DECLARATION (
-  //   EFI_STATUS,
-  //   PeiGetVariable,
-  //   (IN CONST  EFI_PEI_READ_ONLY_VARIABLE2_PPI  *This,
-  //    IN CONST  CHAR16                           *VariableName,
-  //    IN CONST  EFI_GUID                         *VariableGuid,
-  //    OUT       UINT32                           *Attributes,
-  //    IN OUT    UINTN                            *DataSize,
-  //    OUT       VOID                             *Data OPTIONAL)
-  //   );
-
-  // 
   MOCK_FUNCTION_DECLARATION (
     EFI_STATUS,
     pei_GetVariable,
