@@ -17,6 +17,4 @@ static EFI_PEI_READ_ONLY_VARIABLE2_PPI  peiReadOnlyVariablePpi = {
   pei_NextVariableName  // EFI_PEI_GET_NEXT_VARIABLE_NAME2
 };
 
-extern "C" {
-EFI_PEI_READ_ONLY_VARIABLE2_PPI  *PPIVariableServices = &peiReadOnlyVariablePpi;
-}
+static EFI_PEI_READ_ONLY_VARIABLE2_PPI  *PPIReadOnlyVariableServices = &peiReadOnlyVariablePpi;
