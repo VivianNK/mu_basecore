@@ -51,3 +51,9 @@
   MdePkg/Test/Mock/Library/GoogleTest/MockPeiServicesLib/MockPeiServicesLib.inf
   MdePkg/Test/Mock/Library/GoogleTest/MockHobLib/MockHobLib.inf
   MdePkg/Test/Mock/Library/GoogleTest/MockFdtLib/MockFdtLib.inf
+  # MU_CHANGE [BEGIN]
+  MdePkg/Test/Mock/Library/Cmocka/MockUefiRuntimeServicesTableLib/MockUefiRuntimeServicesTableLib.inf
+  MdePkg/Test/Mock/Library/Cmocka/MockUefiBootServicesTableLib/MockUefiBootServicesTableLib.inf
+  MdePkg/Test/Mock/Library/Stub/StubHobLib/StubHobLib.inf
+  MdePkg/Test/Mock/Library/Stub/StubUefiLib/StubUefiLib.inf
+  # MU_CHANGE [END]
