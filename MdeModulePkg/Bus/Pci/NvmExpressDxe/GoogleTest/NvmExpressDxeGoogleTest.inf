@@ -1,0 +1,49 @@
+## @file NvmExpressDxeGoogleTest.inf
+#
+#  GoogleTest for NvmExpressDxe
+#
+##
+
+[Defines]
+INF_VERSION    = 0x00010005
+BASE_NAME      = NvmExpressDxeGoogleTest
+FILE_GUID      = D3F6A63D-D34F-4554-8769-2335C224191F
+MODULE_TYPE    = HOST_APPLICATION
+VERSION_STRING = 1.0
+
+#
+# The following information is for reference only and not required by the build tools.
+#
+#  VALID_ARCHITECTURES           = IA32 X64
+#
+
+[Sources]
+  NvmExpressDxeGoogleTest.cpp
+
+[Packages]
+  MdePkg/MdePkg.dec
+  MdeModulePkg/MdeModulePkg.dec
+  UnitTestFrameworkPkg/UnitTestFrameworkPkg.dec
+
+[LibraryClasses]
+  BaseLib
+  DebugLib
+  GoogleTestLib
+  BaseMemoryLib
+  PrintLib
+  MemoryAllocationLib
+
+[Protocols]
+  gEfiPciIoProtocolGuid                       ## TO_START
+  gEfiDevicePathProtocolGuid                  ## TO_START and BY_START
+  gEfiNvmExpressPassThruProtocolGuid          ## BY_START
+  gEfiBlockIoProtocolGuid                     ## BY_START
+  gEfiBlockIo2ProtocolGuid                    ## BY_START
+  gEfiDiskInfoProtocolGuid                    ## BY_START
+  gEfiStorageSecurityCommandProtocolGuid      ## BY_START
+  gEfiDriverSupportedEfiVersionProtocolGuid   ## PRODUCES
+  gMediaSanitizeProtocolGuid                  ## PRODUCES # MU_CHANGE - Add Media Sanitize
+  gEfiResetNotificationProtocolGuid           ## CONSUMES
+
+[Pcd]
+  gEfiMdeModulePkgTokenSpaceGuid.PcdSupportAlternativeQueueSize ## CONSUMES

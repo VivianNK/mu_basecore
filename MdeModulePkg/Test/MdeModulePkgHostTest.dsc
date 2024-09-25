@@ -111,6 +111,14 @@
       NvmExpressDxe|MdeModulePkg/Bus/Pci/NvmExpressDxe/NvmExpressDxe.inf
   }
   # MU_CHANGE End - Add Media Sanitize
+  
+  # MU_CHANGE [BEGIN] - Add NvmExpressDxeUnitTest
+  MdeModulePkg/Bus/Pci/NvmExpressDxe/GoogleTest/NvmExpressDxeGoogleTest.inf {
+    <LibraryClasses>
+      NvmExpressDxe|MdeModulePkg/Bus/Pci/NvmExpressDxe/NvmExpressDxe.inf
+  }
+  # MU_CHANGE [END]
+
   #
   # Build HOST_APPLICATION Libraries
   #
