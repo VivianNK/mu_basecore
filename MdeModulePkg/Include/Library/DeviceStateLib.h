@@ -33,6 +33,8 @@ MU_CHANGE: new file
 #define DEVICE_STATE_MAX  (1 << (31))
 
 typedef UINT32 DEVICE_STATE;
+typedef UINT32 INSECURE_DEVICE_STATE;
+
 
 /**
 Function to Get current device state
@@ -41,6 +43,14 @@ Function to Get current device state
 DEVICE_STATE
 EFIAPI
 GetDeviceState (
+  );
+
+/**
+Function to get InsecureDeviceState PCD
+**/
+INSECURE_DEVICE_STATE
+EFIAPI
+GetInsecureDeviceState (
   );
 
 /**

@@ -1,4 +1,4 @@
-/** @file
+/** @file DeviceStateLib.c
 Functions used to support Getting and Setting Device States.
 This library uses the PcdDeviceStateBitmask dynamic PCD to store the device state
 
@@ -12,6 +12,20 @@ MU_CHANGE: new file
 #include <Library/PcdLib.h>
 #include <Library/DeviceStateLib.h>
 #include <Library/DebugLib.h>
+
+/**
+Function to get InsecureDeviceState
+@retval the InsecureDeviceState PCD value
+**/
+INSECURE_DEVICE_STATE
+EFIAPI
+GetInsecureDeviceState (
+  )
+{
+  INSECURE_DEVICE_STATE  InsecureDevState = PcdGet32 (PcdInsecureDeviceState);
+
+  return InsecureDevState;
+}
 
 /**
 Function to Get current device state

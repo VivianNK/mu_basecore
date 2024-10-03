@@ -26,6 +26,10 @@ states or to define any of the unused bits:
 * BIT 26: DEVICE_STATE_PLATFORM_MODE_2
 * BIT 27: DEVICE_STATE_PLATFORM_MODE_3
 
+### Insecure Device State
+This library has a function, GetInsecureDeviceState, that retrieves the FixedAtBuild PCD,
+GetInsecureDeviceState. This PCD, by default, ORs DEVICE_STATE_SOURCE_DEBUG_ENABLED with DEVICE_STATE_UNIT_TEST_MODE, but can be customized to include other states.
+
 ## Copyright
 
 Copyright (C) Microsoft Corporation.

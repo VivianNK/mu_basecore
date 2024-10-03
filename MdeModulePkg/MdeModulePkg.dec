@@ -1386,6 +1386,12 @@
   gEfiMdeModulePkgTokenSpaceGuid.PcdMaxMemoryTypeInfoPages            |0x60000|UINT32|0x40000150
   # MU_CHANGE TCBZ1086 [END]
 
+  ## MU_CHANGE [BEGIN] - Add InsecureDeviceState to MdeModulePkg
+  # @Prompt Describes an insecure device state. 
+  # Default value is bits 3 and 5 as defined in Include/Library/DeviceStateLib.h
+  gEfiMdeModulePkgTokenSpaceGuid.PcdInsecureDeviceState|0x00000000|UINT32|0x000000028
+  # MU_CHANGE  [END]
+
 [PcdsFixedAtBuild, PcdsPatchableInModule]
   ## Dynamic type PCD can be registered callback function for Pcd setting action.
   #  PcdMaxPeiPcdCallBackNumberPerPcdEntry indicates the maximum number of callback function
