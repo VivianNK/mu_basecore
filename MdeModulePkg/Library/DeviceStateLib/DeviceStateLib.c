@@ -14,17 +14,17 @@ MU_CHANGE: new file
 #include <Library/DebugLib.h>
 
 /**
-Function to get InsecureDeviceState
-@retval the InsecureDeviceState PCD value
+Get the platform defined set of insecure device states. This can be used to measure insecure device
+states into the TPM or perform other required platform actions when the device enters an insecure state.
+
+@retval The bitmask of insecure device states as defined by the platform.
 **/
-INSECURE_DEVICE_STATE
+DEVICE_STATE
 EFIAPI
-GetInsecureDeviceState (
+GetInsecureDeviceStateSetting (
   )
 {
-  INSECURE_DEVICE_STATE  InsecureDevState = PcdGet32 (PcdInsecureDeviceState);
-
-  return InsecureDevState;
+  return FixedPcdGet32 (PcdInsecureDeviceState);
 }
 
 /**
@@ -36,9 +36,7 @@ EFIAPI
 GetDeviceState (
   )
 {
-  DEVICE_STATE  DevState = PcdGet32 (PcdDeviceStateBitmask);
-
-  return DevState;
+  return PcdGet32 (PcdDeviceStateBitmask);
 }
 
 /**

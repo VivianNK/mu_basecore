@@ -1,4 +1,4 @@
-/** @file
+/** @file DeviceStateLib.h
 Functions used to support Getting and Setting Device States.
 
 Copyright (C) Microsoft Corporation.
@@ -33,8 +33,17 @@ MU_CHANGE: new file
 #define DEVICE_STATE_MAX  (1 << (31))
 
 typedef UINT32 DEVICE_STATE;
-typedef UINT32 INSECURE_DEVICE_STATE;
 
+/**
+Get the platform defined set of insecure device states. This can be used to measure insecure device
+states into the TPM or perform other required platform actions when the device enters an insecure state.
+
+@retval The bitmask of insecure device states as defined by the platform.
+**/
+DEVICE_STATE
+EFIAPI
+GetInsecureDeviceStateSetting (
+  );
 
 /**
 Function to Get current device state
@@ -43,14 +52,6 @@ Function to Get current device state
 DEVICE_STATE
 EFIAPI
 GetDeviceState (
-  );
-
-/**
-Function to get InsecureDeviceState PCD
-**/
-INSECURE_DEVICE_STATE
-EFIAPI
-GetInsecureDeviceState (
   );
 
 /**
