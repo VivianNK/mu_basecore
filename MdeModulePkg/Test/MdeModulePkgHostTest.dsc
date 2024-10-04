@@ -111,6 +111,14 @@
       NvmExpressDxe|MdeModulePkg/Bus/Pci/NvmExpressDxe/NvmExpressDxe.inf
   }
   # MU_CHANGE End - Add Media Sanitize
+
+  # MU_CHANGE [BEGIN] - Add a host-based unit test for DeviceStateLib
+  MdeModulePkg/Library/DeviceStateLib/GoogleTest/DeviceStateLibGoogleTest.inf {
+    <LibraryClasses>
+      DeviceStateLib|MdeModulePkg/Library/DeviceStateLib/DeviceStateLib.inf
+  }
+  # MU_CHANGE [END]
+
   #
   # Build HOST_APPLICATION Libraries
   #

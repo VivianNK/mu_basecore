@@ -13,6 +13,15 @@ MU_CHANGE: new file
 #include <Library/DeviceStateLib.h>
 #include <Library/DebugLib.h>
 
+CHAR8  *DEVICE_STATE_STRINGS[6] = {
+  DEVICE_STATE_SECUREBOOT_OFF_STRING,
+  DEVICE_STATE_MANUFACTURING_MODE_STRING,
+  DEVICE_STATE_DEVELOPMENT_BUILD_ENABLED_STRING,
+  DEVICE_STATE_SOURCE_DEBUG_ENABLED_STRING,
+  DEVICE_STATE_UNDEFINED_STRING,
+  DEVICE_STATE_UNIT_TEST_MODE_STRING,
+};
+
 /**
  * Get String that represents the device's current insecure states, using the platform defined set of
  * insecure device states. This can be used to measure insecure device states into the TPM or perform
@@ -30,7 +39,7 @@ GetInsecureDeviceStateString (
   )
 {
   CHAR8         *String;
-  UINTN         BitmaskFromIndex;
+  DEVICE_STATE  BitmaskFromIndex;
   DEVICE_STATE  CurrentDeviceState         = GetDeviceState ();
   DEVICE_STATE  InsecureDeviceStateSetting = GetInsecureDeviceStateSetting ();
 
@@ -100,8 +109,8 @@ DeviceStateBitmaskIsSet (
   IN DEVICE_STATE  DeviceStateBitmask
   )
 {
-  DEBUG ((DEBUG_INFO, "Checking Device State bit 0x%X\n", CurrentDeviceState));
-  return ((CurrentDeviceState & DeviceStateBitmask) == 1);
+  DEBUG ((DEBUG_INFO, "Checking Device State bit 0x%X against Bitmask 0x%X\n", CurrentDeviceState, DeviceStateBitmask));
+  return ((CurrentDeviceState & DeviceStateBitmask) != 0);
 }
 
 /**
