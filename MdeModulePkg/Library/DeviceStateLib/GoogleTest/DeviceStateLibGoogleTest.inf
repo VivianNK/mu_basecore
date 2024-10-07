@@ -2,6 +2,8 @@
 #
 #  Host-based GooglTest for DeviceStateLib
 #
+#  Copyright (C) Microsoft Corporation.
+#  SPDX-License-Identifier: BSD-2-Clause-Patent
 ##
 
 [Defines]
@@ -28,9 +30,10 @@ VERSION_STRING = 1.0
 [LibraryClasses]
   BaseLib
   DebugLib
-  UnitTestLib
-  MemoryAllocationLib
-  BaseMemoryLib
+  GoogleTestLib
+  DeviceStateLib
+ # MemoryAllocationLib
+ # BaseMemoryLib
   PcdLib
   
 [Pcd]

@@ -116,6 +116,7 @@
   MdeModulePkg/Library/DeviceStateLib/GoogleTest/DeviceStateLibGoogleTest.inf {
     <LibraryClasses>
       DeviceStateLib|MdeModulePkg/Library/DeviceStateLib/DeviceStateLib.inf
+      PcdLib|MdePkg/Test/Mock/Library/GoogleTest/MockPcdLib/MockPcdLib.inf
   }
   # MU_CHANGE [END]
 
