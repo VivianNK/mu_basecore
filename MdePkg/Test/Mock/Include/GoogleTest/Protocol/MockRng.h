@@ -41,8 +41,16 @@ struct MockRng {
     );
 };
 
-extern "C" {
-  extern EFI_RNG_PROTOCOL  *gRngProtocol;
-}
+MOCK_INTERFACE_DEFINITION (MockRng);
+MOCK_FUNCTION_DEFINITION (MockRng, GetInfo, 3, EFIAPI);
+MOCK_FUNCTION_DEFINITION (MockRng, GetRng, 4, EFIAPI);
+
+// Mock function declaration for external functions (i.e. functions to
+// mock that do not exist in the compilation unit).
+#define MOCK_RNG_PROTOCOL_INSTANCE(NAME)  \
+  EFI_RNG_PROTOCOL NAME##_INSTANCE = {    \
+    GetInfo,                              \
+    GetRng };                             \
+  EFI_RNG_PROTOCOL  *NAME = &NAME##_INSTANCE;
 
 #endif // MOCK_RNG_H_
