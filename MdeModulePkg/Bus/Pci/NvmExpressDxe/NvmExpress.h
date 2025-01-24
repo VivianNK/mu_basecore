@@ -78,7 +78,13 @@ extern EFI_DRIVER_SUPPORTED_EFI_VERSION_PROTOCOL  gNvmExpressDriverSupportedEfiV
 //
 #define NVME_ASYNC_CCQ_SIZE  255
 
-#define NVME_MAX_QUEUES  3                              // Number of queues supported by the driver
+// MU_CHANGE [BEGIN] - Request Number of Queues from Controller
+// Maximum number of queue pairs supported by the driver, including the admin queues.
+// Queue 0 - Admin
+// Queue 1 - Blocking I/O (BlockIo Protocol)
+// Queue 2 - Asynchronous I/O (BlockIo2 Protocol)
+// MU_CHANGE [END] - Request Number of Queues from Controller
+#define NVME_MAX_QUEUES  3
 
 // MU_CHANGE Start - Add Media Sanitize
 //
@@ -145,6 +151,16 @@ struct _NVME_CONTROLLER_PRIVATE_DATA {
   // pointer to identify controller data
   //
   NVME_ADMIN_CONTROLLER_DATA            *ControllerData;
+
+  // MU_CHANGE [BEGIN] - Request Number of Queues from Controller
+  //
+  // Number of Queues Allocated by the controller
+  // UEFI always uses a 1:1 submission:completion queue allocation so we
+  // use NumberOfDataQueuePairs to represent the number of data queue pairs allocated.
+  // NumberOfDataQueuePairs = Nsqa = Ncqa
+  //
+  UINT32    NumberOfDataQueuePairs;
+  // MU_CHANGE [END] - Request Number of Queues from Controller
 
   //
   // 6 x 4kB aligned buffers will be carved out of this buffer.

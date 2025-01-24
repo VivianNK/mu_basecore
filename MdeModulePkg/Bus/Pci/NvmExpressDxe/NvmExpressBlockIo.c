@@ -169,6 +169,13 @@ NvmeRead (
   BOOLEAN                       IsEmpty;
   EFI_TPL                       OldTpl;
 
+  // MU_CHANGE [BEGIN] - Request Number of Queues from Controller
+  if (&Device->AsyncQueue == NULL) {
+    return EFI_UNSUPPORTED;
+  }
+
+  // MU_CHANGE [END] - Request Number of Queues from Controller
+
   //
   // Wait for the device's asynchronous I/O queue to become empty.
   //
@@ -254,6 +261,13 @@ NvmeWrite (
   UINTN                         OrginalBlocks;
   BOOLEAN                       IsEmpty;
   EFI_TPL                       OldTpl;
+
+  // MU_CHANGE [BEGIN] - Request Number of Queues from Controller
+  if (&Device->AsyncQueue == NULL) {
+    return EFI_UNSUPPORTED;
+  }
+
+  // MU_CHANGE [END] - Request Number of Queues from Controller
 
   //
   // Wait for the device's asynchronous I/O queue to become empty.
@@ -1539,6 +1553,13 @@ NvmeBlockIoFlushBlocksEx (
   }
 
   Device = NVME_DEVICE_PRIVATE_DATA_FROM_BLOCK_IO2 (This);
+
+  // MU_CHANGE [BEGIN] - Request Number of Queues from Controller
+  if (&Device->AsyncQueue == NULL) {
+    return EFI_UNSUPPORTED;
+  }
+
+  // MU_CHANGE [END] - Request Number of Queues from Controller
 
   //
   // Wait for the asynchronous I/O queue to become empty.
