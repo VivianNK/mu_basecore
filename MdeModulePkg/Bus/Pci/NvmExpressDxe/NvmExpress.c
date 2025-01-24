@@ -172,14 +172,17 @@ EnumerateNvmeDevNamespace (
     Device->BlockIo.WriteBlocks = NvmeBlockIoWriteBlocks;
     Device->BlockIo.FlushBlocks = NvmeBlockIoFlushBlocks;
 
-    //
-    // Create BlockIo2 Protocol instance
-    //
-    Device->BlockIo2.Media         = &Device->Media;
-    Device->BlockIo2.Reset         = NvmeBlockIoResetEx;
-    Device->BlockIo2.ReadBlocksEx  = NvmeBlockIoReadBlocksEx;
-    Device->BlockIo2.WriteBlocksEx = NvmeBlockIoWriteBlocksEx;
-    Device->BlockIo2.FlushBlocksEx = NvmeBlockIoFlushBlocksEx;
+    if (Private->Nsqa > 1) {
+      // We have multiple data queues, so we can support the BlockIo2 protocol
+
+      // Create BlockIo2 Protocol instance
+      Device->BlockIo2.Media         = &Device->Media;
+      Device->BlockIo2.Reset         = NvmeBlockIoResetEx;
+      Device->BlockIo2.ReadBlocksEx  = NvmeBlockIoReadBlocksEx;
+      Device->BlockIo2.WriteBlocksEx = NvmeBlockIoWriteBlocksEx;
+      Device->BlockIo2.FlushBlocksEx = NvmeBlockIoFlushBlocksEx;
+    }
+
     InitializeListHead (&Device->AsyncQueue);
 
     // MU_CHANGE Start - Add Media Sanitize
@@ -260,8 +263,6 @@ EnumerateNvmeDevNamespace (
                     Device->DevicePath,
                     &gEfiBlockIoProtocolGuid,
                     &Device->BlockIo,
-                    &gEfiBlockIo2ProtocolGuid,
-                    &Device->BlockIo2,
                     &gEfiDiskInfoProtocolGuid,
                     &Device->DiskInfo,
                     NULL
@@ -269,6 +270,20 @@ EnumerateNvmeDevNamespace (
 
     if (EFI_ERROR (Status)) {
       goto Exit;
+    }
+
+    if (Private->Nsqa > 1) {
+      // We have multiple data queues, so we can support the BlockIo2 protocol
+      Status = gBS->InstallProtocolInterface (
+                      &Device->DeviceHandle,
+                      &gEfiBlockIo2ProtocolGuid,
+                      EFI_NATIVE_INTERFACE,
+                      &Device->BlockIo2
+                      );
+      if (EFI_ERROR (Status)) {
+        DEBUG ((DEBUG_ERROR, "%a(%d): Failed to install BlockIo2 protocol\n", __FILE__, __LINE__));
+        goto Exit;
+      }
     }
 
     //
@@ -288,12 +303,20 @@ EnumerateNvmeDevNamespace (
                Device->DevicePath,
                &gEfiBlockIoProtocolGuid,
                &Device->BlockIo,
-               &gEfiBlockIo2ProtocolGuid,
-               &Device->BlockIo2,
                &gEfiDiskInfoProtocolGuid,
                &Device->DiskInfo,
                NULL
                );
+
+        if (Private->Nsqa > 1) {
+          // We have multiple data queues, so we need to uninstall the BlockIo2 protocol
+          gBS->UninstallProtocolInterface (
+                 Device->DeviceHandle,
+                 &gEfiBlockIo2ProtocolGuid,
+                 &Device->BlockIo2
+                 );
+        }
+
         goto Exit;
       }
     }
@@ -478,6 +501,28 @@ UnregisterNvmeNamespace (
          );
 
   //
+  // If BlockIo2 is installed, uninstall it.
+  //
+  if (Device->Controller->Nsqa > 1) {
+    Status = gBS->UninstallProtocolInterface (
+                    Handle,
+                    &gEfiBlockIo2ProtocolGuid,
+                    &Device->BlockIo2
+                    );
+    if (EFI_ERROR (Status)) {
+      gBS->OpenProtocol (
+             Controller,
+             &gEfiNvmExpressPassThruProtocolGuid,
+             (VOID **)&DummyInterface,
+             This->DriverBindingHandle,
+             Handle,
+             EFI_OPEN_PROTOCOL_BY_CHILD_CONTROLLER
+             );
+      return Status;
+    }
+  }
+
+  //
   // The Nvm Express driver installs the BlockIo and DiskInfo in the DriverBindingStart().
   // Here should uninstall both of them.
   //
@@ -487,8 +532,6 @@ UnregisterNvmeNamespace (
                   Device->DevicePath,
                   &gEfiBlockIoProtocolGuid,
                   &Device->BlockIo,
-                  &gEfiBlockIo2ProtocolGuid,
-                  &Device->BlockIo2,
                   &gEfiDiskInfoProtocolGuid,
                   &Device->DiskInfo,
                   NULL
@@ -1111,25 +1154,29 @@ NvmExpressDriverBindingStart (
 
     //
     // Start the asynchronous I/O completion monitor
+    // The ProcessAsyncTaskList event and NVME_HC_ASYNC_TIMER timer are only used for the BlockIo2 protocol,
+    // which is only installed when the number of IO queues is greater than 1
     //
-    Status = gBS->CreateEvent (
-                    EVT_TIMER | EVT_NOTIFY_SIGNAL,
-                    TPL_NOTIFY,
-                    ProcessAsyncTaskList,
-                    Private,
-                    &Private->TimerEvent
-                    );
-    if (EFI_ERROR (Status)) {
-      goto Exit;
-    }
+    if (Private->Nsqa > 1) {
+      Status = gBS->CreateEvent (
+                      EVT_TIMER | EVT_NOTIFY_SIGNAL,
+                      TPL_NOTIFY,
+                      ProcessAsyncTaskList,
+                      Private,
+                      &Private->TimerEvent
+                      );
+      if (EFI_ERROR (Status)) {
+        goto Exit;
+      }
 
-    Status = gBS->SetTimer (
-                    Private->TimerEvent,
-                    TimerPeriodic,
-                    NVME_HC_ASYNC_TIMER
-                    );
-    if (EFI_ERROR (Status)) {
-      goto Exit;
+      Status = gBS->SetTimer (
+                      Private->TimerEvent,
+                      TimerPeriodic,
+                      NVME_HC_ASYNC_TIMER
+                      );
+      if (EFI_ERROR (Status)) {
+        goto Exit;
+      }
     }
 
     Status = gBS->InstallMultipleProtocolInterfaces (

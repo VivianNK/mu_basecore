@@ -78,7 +78,8 @@ extern EFI_DRIVER_SUPPORTED_EFI_VERSION_PROTOCOL  gNvmExpressDriverSupportedEfiV
 //
 #define NVME_ASYNC_CCQ_SIZE  255
 
-#define NVME_MAX_QUEUES  3                              // Number of queues supported by the driver
+// Maximum number of queue pairs supported by the driver, including the admin queues.
+#define NVME_MAX_QUEUES  3
 
 // MU_CHANGE Start - Add Media Sanitize
 //
@@ -162,6 +163,12 @@ struct _NVME_CONTROLLER_PRIVATE_DATA {
   NVME_ADMIN_CONTROLLER_DATA            *ControllerData;
 
   //
+  // Number of Queues Allocated by the controller (0-based where 0 is 1 queue)
+  // 
+  UINT32 Nsqa; // Number of Submission Queues Allocated
+  UINT32 Ncqa; // Number of Completion Queues Allocated
+
+  //
   // 6 x 4kB aligned buffers will be carved out of this buffer.
   // 1st 4kB boundary is the start of the admin submission queue.
   // 2nd 4kB boundary is the start of the admin completion queue.
@@ -193,8 +200,8 @@ struct _NVME_CONTROLLER_PRIVATE_DATA {
   //
   BOOLEAN        CreateIoQueue;
 
-  UINT8          Pt[NVME_MAX_QUEUES];
-  UINT16         Cid[NVME_MAX_QUEUES];
+  UINT8          Pt[NVME_MAX_QUEUES];  // Phase Tag
+  UINT16         Cid[NVME_MAX_QUEUES]; // Command Identifier
 
   //
   // Nvme controller capabilities
