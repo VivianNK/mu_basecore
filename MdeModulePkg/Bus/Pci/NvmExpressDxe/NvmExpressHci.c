@@ -200,6 +200,13 @@ WriteNvmeAdminQueueAttributes (
   EFI_STATUS           Status;
   UINT32               Data;
 
+  //
+  // Save Aqa to Private data for later use.
+  // Note we are using the Spec-defined minimum SQES and CQES here.
+  //
+  Private->SqData[0].NumberOfEntries = Aqa->Asqs;
+  Private->CqData[0].NumberOfEntries = Aqa->Acqs;
+
   PciIo  = Private->PciIo;
   Data   = ReadUnaligned32 ((UINT32 *)Aqa);
   Status = PciIo->Mem.Write (
@@ -214,6 +221,48 @@ WriteNvmeAdminQueueAttributes (
   if (EFI_ERROR (Status)) {
     return Status;
   }
+
+  DEBUG ((DEBUG_INFO, "Admin Submission Queue Size (Number of Entries): %d\n", Aqa->Asqs));
+  DEBUG ((DEBUG_INFO, "Admin Completion Queue Size (Number of Entries): %d\n", Aqa->Acqs));
+
+  return EFI_SUCCESS;
+}
+
+/**
+  Read Nvm Express admin queue attributes register.
+
+  @param  Private          The pointer to the NVME_CONTROLLER_PRIVATE_DATA data structure.
+  @param  Aqa              The buffer used to store the content to be read from admin queue attributes register.
+
+  @return EFI_SUCCESS      Successfully read data from the admin queue attributes register.
+  @return EFI_DEVICE_ERROR Fail to read data from the admin queue attributes register.
+
+**/
+EFI_STATUS
+ReadNvmeAdminQueueAttributes (
+  IN  NVME_CONTROLLER_PRIVATE_DATA  *Private,
+  OUT NVME_AQA                      *Aqa
+  )
+{
+  EFI_PCI_IO_PROTOCOL  *PciIo;
+  EFI_STATUS           Status;
+  UINT32               Data;
+
+  PciIo  = Private->PciIo;
+  Status = PciIo->Mem.Read (
+                        PciIo,
+                        EfiPciIoWidthUint32,
+                        NVME_BAR,
+                        NVME_AQA_OFFSET,
+                        1,
+                        &Data
+                        );
+
+  if (EFI_ERROR (Status)) {
+    return Status;
+  }
+
+  WriteUnaligned32 ((UINT32 *)Aqa, Data);
 
   DEBUG ((DEBUG_INFO, "Aqa.Asqs: %d\n", Aqa->Asqs));
   DEBUG ((DEBUG_INFO, "Aqa.Acqs: %d\n", Aqa->Acqs));
@@ -382,9 +431,11 @@ NvmeDisableController (
 }
 
 /**
-  Enable the Nvm Express controller.
+  Enable the Nvm Express controller. Allocate and write the Controller Configuration data.
 
   @param  Private          The pointer to the NVME_CONTROLLER_PRIVATE_DATA data structure.
+  @param  IoSqEs           The I/O Submission Queue Entry Size.
+  @param  IoCqEs           The I/O Completion Queue Entry Size.
 
   @return EFI_SUCCESS      Successfully enable the controller.
   @return EFI_DEVICE_ERROR Fail to enable the controller.
@@ -393,7 +444,9 @@ NvmeDisableController (
 **/
 EFI_STATUS
 NvmeEnableController (
-  IN NVME_CONTROLLER_PRIVATE_DATA  *Private
+  IN NVME_CONTROLLER_PRIVATE_DATA  *Private,
+  IN UINT8                         IoSqEs,
+  IN UINT8                         IoCqEs
   )
 {
   NVME_CC     Cc;
@@ -410,8 +463,8 @@ NvmeEnableController (
   //
   ZeroMem (&Cc, sizeof (NVME_CC));
   Cc.En     = 1;
-  Cc.Iosqes = 6;
-  Cc.Iocqes = 4;
+  Cc.Iosqes = IoSqEs;
+  Cc.Iocqes = IoCqEs;
 
   Status = WriteNvmeControllerConfiguration (Private, &Cc);
   if (EFI_ERROR (Status)) {
@@ -573,8 +626,8 @@ NvmeIdentifyNamespace (
   using the Nsqa and Ncqa fields.
 
   @param  Private          The pointer to the NVME_CONTROLLER_PRIVATE_DATA data structure.
-  @param  NCQR             The number of completion queues requested
-  @param  NSQR             The number of submission queues requested
+  @param  Ncqr             The number of completion queues requested
+  @param  Nsqr             The number of submission queues requested
 
   @return EFI_SUCCESS      Successfully set the number of queues.
   @return EFI_DEVICE_ERROR Fail to set the number of queues.
@@ -583,8 +636,8 @@ NvmeIdentifyNamespace (
 EFI_STATUS
 NvmeSetFeaturesNumberOfQueues (
   IN OUT NVME_CONTROLLER_PRIVATE_DATA  *Private,
-  IN UINT16                            NCQR,
-  IN UINT16                            NSQR
+  IN UINT16                            Ncqr,
+  IN UINT16                            Nsqr
   )
 {
   EFI_NVM_EXPRESS_PASS_THRU_COMMAND_PACKET  CommandPacket;
@@ -612,15 +665,16 @@ NvmeSetFeaturesNumberOfQueues (
   Command.Cdw0.Opcode          = NVME_ADMIN_SET_FEATURES_CMD;
 
   // Populate the Set Features Cdw10 and Cdw11 according to Nvm Express 1.3d Spec
+  // Note we subtract 1 from the requested number of queues to get the 0-based value
   SetFeatures.Bits.Fid             = NVME_FEATURE_NUMBER_OF_QUEUES;
-  NumberOfQueuesRequested.Bits.NCQ = NCQR;
-  NumberOfQueuesRequested.Bits.NSQ = NSQR;
+  NumberOfQueuesRequested.Bits.Ncq = Ncqr - 1;
+  NumberOfQueuesRequested.Bits.Nsq = Nsqr - 1;
   CommandPacket.NvmeCmd->Cdw10     = SetFeatures.Uint32;
   CommandPacket.NvmeCmd->Cdw11     = NumberOfQueuesRequested.Uint32;
 
   CommandPacket.NvmeCmd->Flags = CDW10_VALID | CDW11_VALID;
 
-  DEBUG((DEBUG_INFO, "Number of Queues Requested: NSQR=%d, NCQR=%d\n", NSQR, NCQR));
+  DEBUG ((DEBUG_INFO, "Number of Queues Requested: Nsqr=%d, Ncqr=%d\n", Nsqr, Ncqr));
 
   // Send the Set Features Command for Number of Queues
   Status = Private->Passthru.PassThru (
@@ -637,14 +691,16 @@ NvmeSetFeaturesNumberOfQueues (
 
   //
   // Save the number of queues allocated, adding 1 to account for it being a 0-based value.
-  // E.g. if 1 pair of data queues is allocated NSQ=0, NCQ=0, then Nsqa=1, Ncqa=1
+  // E.g. if 1 pair of data queues is allocated Nsq=0, Ncq=0, then Nsqa=1, Ncqa=1
   // These numbers do not include the admin queues.
+  // This driver at maximum supports 2 pairs of data queues. So we will take the minimum of the requested and allocated values.
+  // TODO what if the controller allocates more queues than requested? And we only allocate/support the number requested?
   //
   NumberOfQueuesAllocated.Uint32 = CommandPacket.NvmeCompletion->DW0;
-  Private->Nsqa                  = NumberOfQueuesAllocated.Bits.NSQ + 1;
-  Private->Ncqa                  = NumberOfQueuesAllocated.Bits.NCQ + 1;
+  Private->Nsqa                  = MIN (NumberOfQueuesAllocated.Bits.Nsq, NumberOfQueuesRequested.Bits.Nsq) + 1;
+  Private->Ncqa                  = MIN (NumberOfQueuesAllocated.Bits.Ncq, NumberOfQueuesRequested.Bits.Ncq) + 1;
 
-  DEBUG((DEBUG_INFO, "Number of Queues Allocated: Nsqa=%d, Ncqa=%d\n", Private->Nsqa, Private->Ncqa));
+  DEBUG ((DEBUG_INFO, "Number of Queues Allocated: Nsqa=%d, Ncqa=%d\n", Private->Nsqa, Private->Ncqa));
   return Status;
 }
 
@@ -801,9 +857,153 @@ NvmeCreateIoSubmissionQueue (
 }
 
 /**
-  Initialize the Nvm Express controller.
+  Initialize the Nvm Express controller Data (IO) Queues
 
   @param[in] Private                 The pointer to the NVME_CONTROLLER_PRIVATE_DATA data structure.
+  @param[in] Aqa                     The pointer to used to the NVME_AQA data structure.
+
+  @retval EFI_SUCCESS                The NVM Express Controller is initialized successfully.
+  @retval Others                     A device error occurred while initializing the controller.
+
+**/
+EFI_STATUS
+NvmeControllerInitIoQueues (
+  IN NVME_CONTROLLER_PRIVATE_DATA  *Private
+  )
+{
+  UINTN       AsqsPages;
+  UINTN       QueuePairPageCount;
+  UINTN       Index;
+  EFI_STATUS  Status;
+
+  // TODO do we want to store the AsqsPages/QueuePairPageCount in the private data structure? so we don't have to recaclulate it later on?
+  // Offset completion queue with submission queue size
+  AsqsPages = EFI_SIZE_TO_PAGES (Private->SqData[1].NumberOfEntries * 2^Private->SqData[1].EntrySize);
+
+  // Calculate the number of pages required for the admin queues
+  QueuePairPageCount = AsqsPages + EFI_SIZE_TO_PAGES (Private->CqData[1].NumberOfEntries * 2^Private->CqData[1].EntrySize);
+
+  //
+  // Address of Data I/O submission & completion queue(s).
+  // We are using the same table of buffer pointers that the admin queus are in, so we start the table from Index + 1, but we have a separate
+  // buffer so we start at the beginning of that buffer.
+  //
+  ZeroMem (Private->DataQueueBuffer, EFI_PAGES_TO_SIZE (QueuePairPageCount) * Private->Nsqa);
+  for (Index = 0; Index < Private->Nsqa; Index++) {
+    Private->SqBuffer[Index + 1]        = (NVME_SQ *)(UINTN)(Private->DataQueueBuffer + Index * QueuePairPageCount * EFI_PAGE_SIZE);
+    Private->SqBufferPciAddr[Index + 1] = (NVME_SQ *)(UINTN)(Private->DataQueueBufferPciAddr + Index * QueuePairPageCount * EFI_PAGE_SIZE);
+    Private->CqBuffer[Index + 1]        = (NVME_CQ *)(UINTN)(Private->DataQueueBuffer + (Index * QueuePairPageCount + AsqsPages) * EFI_PAGE_SIZE);
+    Private->CqBufferPciAddr[Index + 1] = (NVME_CQ *)(UINTN)(Private->DataQueueBufferPciAddr + (Index * QueuePairPageCount + AsqsPages) * EFI_PAGE_SIZE);
+
+    DEBUG ((DEBUG_INFO, "Data IO   Submission Queue (SqBuffer[%d]) = [%016X]\n", Index + 1, Private->SqBuffer[Index + 1]));
+    DEBUG ((DEBUG_INFO, "Data IO   Completion Queue (CqBuffer[%d]) = [%016X]\n", Index + 1, Private->CqBuffer[Index + 1]));
+  }
+
+  // MU_CHANGE [END]
+
+  //
+  // Create I/O completion queue(s).
+  //
+  Status = NvmeCreateIoCompletionQueue (Private);
+  if (EFI_ERROR (Status)) {
+    return Status;
+  }
+
+  //
+  // Create I/O Submission queue(s).
+  //
+  Status = NvmeCreateIoSubmissionQueue (Private);
+
+  return Status;
+}
+
+/**
+  Initialize the Nvm Express controller Admin Queues
+
+  @param[in] Private                 The pointer to the NVME_CONTROLLER_PRIVATE_DATA data structure.
+  @param[in] Aqa                     The pointer to used to the NVME_AQA data structure.
+
+  @retval EFI_SUCCESS                The NVM Express Controller is initialized successfully.
+  @retval Others                     A device error occurred while initializing the controller.
+
+**/
+EFI_STATUS
+NvmeControllerInitAdminQueues (
+  IN NVME_CONTROLLER_PRIVATE_DATA  *Private
+  )
+{
+  NVME_ASQ    Asq;
+  NVME_ACQ    Acq;
+  UINTN       AsqsPages;
+  UINTN       QueuePairPageCount;
+  EFI_STATUS  Status;
+
+  // TODO do we want to store the AsqsPages/QueuePairPageCount in the private data structure? so we don't have to recaclulate it later on?
+  // Offset completion queue with submission queue size
+  AsqsPages = EFI_SIZE_TO_PAGES (Private->SqData[0].NumberOfEntries * 2^Private->SqData[0].EntrySize);
+
+  //
+  // Address of admin submission queue.
+  //
+  Asq = (UINT64)(UINTN)(Private->BufferPciAddr) & ~0xFFF;
+
+  //
+  // Address of admin completion queue.
+  //
+  // MU_CHANGE [BEGIN] - Support alternative hardware queue sizes in NVME driver
+  Acq = (UINT64)(UINTN)(Private->BufferPciAddr + AsqsPages * EFI_PAGE_SIZE) & ~0xFFF;
+
+  // Calculate the number of pages required for the admin queues
+  QueuePairPageCount = AsqsPages + EFI_SIZE_TO_PAGES (Private->CqData[0].NumberOfEntries* 2^Private->CqData[0].EntrySize);
+
+  //
+  // Address of Admin I/O submission & completion queues.
+  //
+  ZeroMem (Private->Buffer, EFI_PAGES_TO_SIZE (QueuePairPageCount));
+  Private->SqBuffer[0]        = (NVME_SQ *)(UINTN)(Private->Buffer);
+  Private->SqBufferPciAddr[0] = (NVME_SQ *)(UINTN)(Private->BufferPciAddr);
+  Private->CqBuffer[0]        = (NVME_CQ *)(UINTN)(Private->Buffer + AsqsPages * EFI_PAGE_SIZE);
+  Private->CqBufferPciAddr[0] = (NVME_CQ *)(UINTN)(Private->BufferPciAddr + AsqsPages * EFI_PAGE_SIZE);
+
+  // MU_CHANGE [END]
+
+  DEBUG ((DEBUG_INFO, "Private->Buffer = [%016X]\n", (UINT64)(UINTN)Private->Buffer));
+  DEBUG ((DEBUG_INFO, "Admin     Submission Queue size (Number of Entries) = [%08X]\n", Private->SqData[0].NumberOfEntries));
+  DEBUG ((DEBUG_INFO, "Admin     Completion Queue size (Number of Entries) = [%08X]\n", Private->CqData[0].NumberOfEntries));
+  DEBUG ((DEBUG_INFO, "Admin     Submission Queue (SqBuffer[0]) = [%016X]\n", Private->SqBuffer[0]));
+  DEBUG ((DEBUG_INFO, "Admin     Completion Queue (CqBuffer[0]) = [%016X]\n", Private->CqBuffer[0]));
+
+  //
+  // Program admin submission queue address.
+  //
+  // TODO how can we program the data queue base address? Or do we need to?
+  Status = WriteNvmeAdminSubmissionQueueBaseAddress (Private, &Asq);
+
+  if (EFI_ERROR (Status)) {
+    return Status;
+  }
+
+  //
+  // Program admin completion queue address.
+  //
+  Status = WriteNvmeAdminCompletionQueueBaseAddress (Private, &Acq);
+
+  return Status;
+}
+
+/**
+  Initialize the Nvm Express controller.
+  - >EnableController
+  - >ReadNvmeControllerCapabilities
+  - >DisableController
+  - **InitializeAdminQueues and write the admin queue addresses**
+  - AllocateIoQueueBuffers
+  - **InitializeIoQueueBuffers and write the queue addresses**
+  -   **CreateIoQueues**
+  - >EnableController
+
+  @param[in] Private                 The pointer to the NVME_CONTROLLER_PRIVATE_DATA data structure.
+  @param[in] Aqa                     The pointer to used to the NVME_AQA data structure.
 
   @retval EFI_SUCCESS                The NVM Express Controller is initialized successfully.
   @retval Others                     A device error occurred while initializing the controller.
@@ -811,18 +1011,20 @@ NvmeCreateIoSubmissionQueue (
 **/
 EFI_STATUS
 NvmeControllerInit (
-  IN NVME_CONTROLLER_PRIVATE_DATA  *Private
+  IN NVME_CONTROLLER_PRIVATE_DATA  *Private,
+  IN NVME_AQA                      *Aqa
   )
 {
-  EFI_STATUS           Status;
-  EFI_PCI_IO_PROTOCOL  *PciIo;
-  UINT64               Supports;
-  NVME_AQA             Aqa;
-  NVME_ASQ             Asq;
-  NVME_ACQ             Acq;
-  UINT16               VidDid[2]; // MU_CHANGE - Improve NVMe controller init robustness
-  UINT8                Sn[21];
-  UINT8                Mn[41];
+  EFI_STATUS            Status;
+  EFI_PCI_IO_PROTOCOL   *PciIo;
+  UINT64                Supports;
+  UINT16                VidDid[2]; // MU_CHANGE - Improve NVMe controller init robustness
+  UINT8                 Sn[21];
+  UINT8                 Mn[41];
+  UINTN                 QueuePairPageCount;
+  UINTN                 Bytes;
+  UINTN                 Index;
+  EFI_PHYSICAL_ADDRESS  MappedAddr;
 
   // MU_CHANGE [BEGIN] - Improve NVMe controller init robustness
   PciIo = Private->PciIo;
@@ -899,20 +1101,14 @@ NvmeControllerInit (
   }
 
   // MU_CHANGE [END] - Improve NVMe controller init robustness
-  // vnk: assumption of 3 queues made here (based on header file/max queues macro)
-  Private->Cid[0]        = 0;
-  Private->Cid[1]        = 0;
-  Private->Cid[2]        = 0;
-  Private->Pt[0]         = 0;
-  Private->Pt[1]         = 0;
-  Private->Pt[2]         = 0;
-  Private->SqTdbl[0].Sqt = 0;
-  Private->SqTdbl[1].Sqt = 0;
-  Private->SqTdbl[2].Sqt = 0;
-  Private->CqHdbl[0].Cqh = 0;
-  Private->CqHdbl[1].Cqh = 0;
-  Private->CqHdbl[2].Cqh = 0;
-  Private->AsyncSqHead   = 0;
+  for (Index = 0; Index < NVME_MAX_QUEUES; Index++) {
+    Private->Cid[Index]        = 0;
+    Private->Pt[Index]         = 0;
+    Private->SqTdbl[Index].Sqt = 0;
+    Private->CqHdbl[Index].Cqh = 0;
+  }
+
+  Private->AsyncSqHead = 0;
 
   Status = NvmeDisableController (Private);
 
@@ -921,105 +1117,25 @@ NvmeControllerInit (
   }
 
   //
-  // set number of entries admin submission & completion queues.
-  //
-  // MU_CHANGE [BEGIN] - Support alternative hardware queue sizes in NVME driver
-  Aqa.Asqs  = PcdGetBool (PcdSupportAlternativeQueueSize) ? MIN (NVME_ALTERNATIVE_MAX_QUEUE_SIZE, Private->Cap.Mqes) : NVME_ASQ_SIZE;
-  Aqa.Rsvd1 = 0;
-  Aqa.Acqs  = PcdGetBool (PcdSupportAlternativeQueueSize) ? MIN (NVME_ALTERNATIVE_MAX_QUEUE_SIZE, Private->Cap.Mqes) : NVME_ACQ_SIZE;
-  Aqa.Rsvd2 = 0;
-  // MU_CHANGE [END]
-
-  //
-  // Address of admin submission queue.
-  //
-  Asq = (UINT64)(UINTN)(Private->BufferPciAddr) & ~0xFFF;
-
-  //
-  // Address of admin completion queue.
-  //
-  // MU_CHANGE [BEGIN] - Support alternative hardware queue sizes in NVME driver
-  if (PcdGetBool (PcdSupportAlternativeQueueSize)) {
-    Acq = (UINT64)(UINTN)(Private->BufferPciAddr + 4 * EFI_PAGE_SIZE) & ~0xFFF;
-  } else {
-    Acq = (UINT64)(UINTN)(Private->BufferPciAddr + EFI_PAGE_SIZE) & ~0xFFF;
-  }
-
-  // vnk: assumption of 3 queues made here
-
-  //
-  // Address of I/O submission & completion queue.
-  //
-  if (PcdGetBool (PcdSupportAlternativeQueueSize)) {
-    ZeroMem (Private->Buffer, EFI_PAGES_TO_SIZE (NVME_ALTERNATIVE_TOTAL_QUEUE_BUFFER_IN_PAGES));
-    Private->SqBuffer[0]        = (NVME_SQ *)(UINTN)(Private->Buffer);
-    Private->SqBufferPciAddr[0] = (NVME_SQ *)(UINTN)(Private->BufferPciAddr);
-    Private->CqBuffer[0]        = (NVME_CQ *)(UINTN)(Private->Buffer + 4 * EFI_PAGE_SIZE);
-    Private->CqBufferPciAddr[0] = (NVME_CQ *)(UINTN)(Private->BufferPciAddr + 4 * EFI_PAGE_SIZE);
-    Private->SqBuffer[1]        = (NVME_SQ *)(UINTN)(Private->Buffer + 5 * EFI_PAGE_SIZE);
-    Private->SqBufferPciAddr[1] = (NVME_SQ *)(UINTN)(Private->BufferPciAddr + 5 * EFI_PAGE_SIZE);
-    Private->CqBuffer[1]        = (NVME_CQ *)(UINTN)(Private->Buffer + 9 * EFI_PAGE_SIZE);
-    Private->CqBufferPciAddr[1] = (NVME_CQ *)(UINTN)(Private->BufferPciAddr + 9 * EFI_PAGE_SIZE);
-    Private->SqBuffer[2]        = (NVME_SQ *)(UINTN)(Private->Buffer + 10 * EFI_PAGE_SIZE);
-    Private->SqBufferPciAddr[2] = (NVME_SQ *)(UINTN)(Private->BufferPciAddr + 10 * EFI_PAGE_SIZE);
-    Private->CqBuffer[2]        = (NVME_CQ *)(UINTN)(Private->Buffer + 14 * EFI_PAGE_SIZE);
-    Private->CqBufferPciAddr[2] = (NVME_CQ *)(UINTN)(Private->BufferPciAddr + 14 * EFI_PAGE_SIZE);
-  } else {
-    ZeroMem (Private->Buffer, EFI_PAGES_TO_SIZE (6));
-    Private->SqBuffer[0]        = (NVME_SQ *)(UINTN)(Private->Buffer);
-    Private->SqBufferPciAddr[0] = (NVME_SQ *)(UINTN)(Private->BufferPciAddr);
-    Private->CqBuffer[0]        = (NVME_CQ *)(UINTN)(Private->Buffer + 1 * EFI_PAGE_SIZE);
-    Private->CqBufferPciAddr[0] = (NVME_CQ *)(UINTN)(Private->BufferPciAddr + 1 * EFI_PAGE_SIZE);
-    Private->SqBuffer[1]        = (NVME_SQ *)(UINTN)(Private->Buffer + 2 * EFI_PAGE_SIZE);
-    Private->SqBufferPciAddr[1] = (NVME_SQ *)(UINTN)(Private->BufferPciAddr + 2 * EFI_PAGE_SIZE);
-    Private->CqBuffer[1]        = (NVME_CQ *)(UINTN)(Private->Buffer + 3 * EFI_PAGE_SIZE);
-    Private->CqBufferPciAddr[1] = (NVME_CQ *)(UINTN)(Private->BufferPciAddr + 3 * EFI_PAGE_SIZE);
-    Private->SqBuffer[2]        = (NVME_SQ *)(UINTN)(Private->Buffer + 4 * EFI_PAGE_SIZE);
-    Private->SqBufferPciAddr[2] = (NVME_SQ *)(UINTN)(Private->BufferPciAddr + 4 * EFI_PAGE_SIZE);
-    Private->CqBuffer[2]        = (NVME_CQ *)(UINTN)(Private->Buffer + 5 * EFI_PAGE_SIZE);
-    Private->CqBufferPciAddr[2] = (NVME_CQ *)(UINTN)(Private->BufferPciAddr + 5 * EFI_PAGE_SIZE);
-  }
-
-  // MU_CHANGE [END]
-
-  DEBUG ((DEBUG_INFO, "Private->Buffer = [%016X]\n", (UINT64)(UINTN)Private->Buffer));
-  DEBUG ((DEBUG_INFO, "Admin     Submission Queue size (Aqa.Asqs) = [%08X]\n", Aqa.Asqs));
-  DEBUG ((DEBUG_INFO, "Admin     Completion Queue size (Aqa.Acqs) = [%08X]\n", Aqa.Acqs));
-  DEBUG ((DEBUG_INFO, "Admin     Submission Queue (SqBuffer[0]) = [%016X]\n", Private->SqBuffer[0]));
-  DEBUG ((DEBUG_INFO, "Admin     Completion Queue (CqBuffer[0]) = [%016X]\n", Private->CqBuffer[0]));
-  DEBUG ((DEBUG_INFO, "Sync  I/O Submission Queue (SqBuffer[1]) = [%016X]\n", Private->SqBuffer[1]));
-  DEBUG ((DEBUG_INFO, "Sync  I/O Completion Queue (CqBuffer[1]) = [%016X]\n", Private->CqBuffer[1]));
-  DEBUG ((DEBUG_INFO, "Async I/O Submission Queue (SqBuffer[2]) = [%016X]\n", Private->SqBuffer[2]));
-  DEBUG ((DEBUG_INFO, "Async I/O Completion Queue (CqBuffer[2]) = [%016X]\n", Private->CqBuffer[2]));
-
-  //
   // Program admin queue attributes.
   //
-  Status = WriteNvmeAdminQueueAttributes (Private, &Aqa);
+  Status = WriteNvmeAdminQueueAttributes (Private, Aqa);
 
   if (EFI_ERROR (Status)) {
     return Status;
   }
 
-  //
-  // Program admin submission queue address.
-  //
-  Status = WriteNvmeAdminSubmissionQueueBaseAddress (Private, &Asq);
+  // Define the admin queue entry sizes
+  Private->SqData[0].EntrySize = NVME_IOSQES_MIN;
+  Private->CqData[0].EntrySize = NVME_IOCQES_MIN;
+
+  Status = NvmeControllerInitAdminQueues (Private);
 
   if (EFI_ERROR (Status)) {
     return Status;
   }
 
-  //
-  // Program admin completion queue address.
-  //
-  Status = WriteNvmeAdminCompletionQueueBaseAddress (Private, &Acq);
-
-  if (EFI_ERROR (Status)) {
-    return Status;
-  }
-
-  Status = NvmeEnableController (Private);
+  Status = NvmeEnableController (Private, Private->SqData[0].EntrySize, Private->CqData[0].EntrySize);
   if (EFI_ERROR (Status)) {
     return Status;
   }
@@ -1069,7 +1185,7 @@ NvmeControllerInit (
   DEBUG ((DEBUG_INFO, "    NN        : 0x%x\n", Private->ControllerData->Nn));
 
   //
-  // Send Set Features Command to request the maximum number of data queue.
+  // Send Set Features Command to request the maximum number of data queues.
   // The controller is free to allocate a different number of queues from the number requested.
   // The number of queues allocated is returned and stored in the controller private data structure
   // using the Nsqa and Ncqa fields.
@@ -1080,24 +1196,179 @@ NvmeControllerInit (
     return Status;
   }
 
-  // TODO do we need to somehow invalidate the CqBuffer[3]/SqBuffer[3] by
-  // freeing memory and setting their address to null? What happens if we don't?
-  // Can we check for number of queuess before allocating data queues?
+  // TODO do we need to somehow invalidate the CqBuffer[2]/SqBuffer[2]? They should be null. we should control its use in our driver...
 
   //
-  // Create two I/O completion queues.
-  // One for blocking I/O, one for non-blocking I/O.
+  // Allocate Data Queues - note we are assuming the queue entry sizes are the same as the admin queue entry sizes for the sake of memory allocation.
+  // The identify controller data tells us in SQES and CQES what the controller's minimum and maximum queue entry sizes are. We haven't used this before since we
+  // use the spec-defined minimum queue entry sizes.
+  // We are also allocating based on the admin defined queue sizes in number of entries.
+  // Some scenarios may use different queue sizes, currently we only see the case where the driver needs IO queue sizes <= admin queue sizes. So this allocation should be sufficient.
+  // We may want to explore a more dynamic allocation in the future.
   //
-  Status = NvmeCreateIoCompletionQueue (Private);
+  for (Index = 1; Index <= Private->Nsqa; Index++) {
+    Private->SqData[Index].NumberOfEntries = Private->SqData[0].NumberOfEntries;
+    Private->CqData[Index].NumberOfEntries = Private->CqData[0].NumberOfEntries;
+    Private->SqData[Index].EntrySize       = Private->SqData[0].EntrySize;
+    Private->CqData[Index].EntrySize       = Private->CqData[0].EntrySize;
+  }
+
+  // Using the first data queue size for the number of pages required for the data queues
+  QueuePairPageCount = EFI_SIZE_TO_PAGES (Private->SqData[1].NumberOfEntries * 2^Private->SqData[1].EntrySize)
+                       + EFI_SIZE_TO_PAGES (Private->CqData[1].NumberOfEntries * 2^Private->CqData[1].EntrySize);
+
+  Status = PciIo->AllocateBuffer (
+                    PciIo,
+                    AllocateAnyPages,
+                    EfiBootServicesData,
+                    QueuePairPageCount * Private->Nsqa,
+                    (VOID **)&Private->DataQueueBuffer,
+                    0
+                    );
+  if (EFI_ERROR (Status)) {
+    return Status;
+  }
+
+  DEBUG ((DEBUG_INFO, "Private->DataQueueBuffer = [%016X]\n", (UINT64)(UINTN)Private->DataQueueBuffer));
+
+  // MU_CHANGE - Support alternative hardware queue sizes in NVME driver
+  Bytes  = EFI_PAGES_TO_SIZE (QueuePairPageCount * Private->Nsqa);
+  Status = PciIo->Map (
+                    PciIo,
+                    EfiPciIoOperationBusMasterCommonBuffer,
+                    Private->DataQueueBuffer,
+                    &Bytes,
+                    &MappedAddr,
+                    &Private->DataQueueMapping
+                    );
+
+  // MU_CHANGE - Support alternative hardware queue sizes in NVME driver
+  if (EFI_ERROR (Status) || (Bytes != EFI_PAGES_TO_SIZE (QueuePairPageCount * Private->Nsqa))) {
+    return Status;
+  }
+
+  Private->DataQueueBufferPciAddr = (UINT8 *)(UINTN)MappedAddr;
+
+  Status = NvmeControllerInitIoQueues (Private);
+
+  return Status;
+}
+
+/**
+  Reset the Nvm Express controller.
+
+  @param[in] Private                 The pointer to the NVME_CONTROLLER_PRIVATE_DATA data structure.
+
+  @retval EFI_SUCCESS                The NVM Express Controller is initialized successfully.
+  @retval Others                     A device error occurred while initializing the controller.
+
+**/
+EFI_STATUS
+NvmeControllerReset (
+  IN NVME_CONTROLLER_PRIVATE_DATA  *Private
+  )
+{
+  EFI_STATUS           Status;
+  EFI_PCI_IO_PROTOCOL  *PciIo;
+  UINTN                Index;
+  UINT16               VidDid[2];
+  UINT8                Sn[21];
+  UINT8                Mn[41];
+
+  DEBUG ((DEBUG_INFO, "%a: Begin Controller Reset\n", __FUNCTION__));
+
+  PciIo = Private->PciIo;
+
+  //
+  // Verify the controller is still accessible
+  //
+  Status = PciIo->Pci.Read (
+                        PciIo,
+                        EfiPciIoWidthUint16,
+                        PCI_VENDOR_ID_OFFSET,
+                        ARRAY_SIZE (VidDid),
+                        VidDid
+                        );
+  if (EFI_ERROR (Status)) {
+    ASSERT_EFI_ERROR (Status);
+    return EFI_DEVICE_ERROR;
+  }
+
+  if ((VidDid[0] == 0xFFFF) || (VidDid[1] == 0xFFFF)) {
+    return EFI_DEVICE_ERROR;
+  }
+
+  for (Index = 0; Index < NVME_MAX_QUEUES; Index++) {
+    Private->Cid[Index]        = 0;
+    Private->Pt[Index]         = 0;
+    Private->SqTdbl[Index].Sqt = 0;
+    Private->CqHdbl[Index].Cqh = 0;
+  }
+
+  Private->AsyncSqHead = 0;
+
+  Status = NvmeDisableController (Private);
+
+  if (EFI_ERROR (Status)) {
+    return Status;
+  }
+
+  Status = NvmeControllerInitAdminQueues (Private);
+
+  if (EFI_ERROR (Status)) {
+    return Status;
+  }
+
+  Status = NvmeEnableController (Private, Private->SqData[0].EntrySize, Private->CqData[0].EntrySize);
   if (EFI_ERROR (Status)) {
     return Status;
   }
 
   //
-  // Create two I/O Submission queues.
-  // One for blocking I/O, one for non-blocking I/O.
+  // Allocate buffer for Identify Controller data
   //
-  Status = NvmeCreateIoSubmissionQueue (Private);
+  if (Private->ControllerData == NULL) {
+    Private->ControllerData = (NVME_ADMIN_CONTROLLER_DATA *)AllocateZeroPool (sizeof (NVME_ADMIN_CONTROLLER_DATA));
+
+    if (Private->ControllerData == NULL) {
+      return EFI_OUT_OF_RESOURCES;
+    }
+  }
+
+  //
+  // Get current Identify Controller Data
+  //
+  Status = NvmeIdentifyController (Private, Private->ControllerData);
+
+  if (EFI_ERROR (Status)) {
+    FreePool (Private->ControllerData);
+    Private->ControllerData = NULL;
+    return EFI_NOT_FOUND;
+  }
+
+  //
+  // Dump NvmExpress Identify Controller Data
+  //
+  CopyMem (Sn, Private->ControllerData->Sn, sizeof (Private->ControllerData->Sn));
+  Sn[20] = 0;
+  CopyMem (Mn, Private->ControllerData->Mn, sizeof (Private->ControllerData->Mn));
+  Mn[40] = 0;
+  DEBUG ((DEBUG_INFO, " == NVME IDENTIFY CONTROLLER DATA ==\n"));
+  DEBUG ((DEBUG_INFO, "    PCI VID   : 0x%x\n", Private->ControllerData->Vid));
+  DEBUG ((DEBUG_INFO, "    PCI SSVID : 0x%x\n", Private->ControllerData->Ssvid));
+  DEBUG ((DEBUG_INFO, "    SN        : %a\n", Sn));
+  DEBUG ((DEBUG_INFO, "    MN        : %a\n", Mn));
+  DEBUG ((DEBUG_INFO, "    FR        : 0x%x\n", *((UINT64 *)Private->ControllerData->Fr)));
+  DEBUG ((DEBUG_INFO, "    TNVMCAP (high 8-byte) : 0x%lx\n", *((UINT64 *)(Private->ControllerData->Tnvmcap + 8))));
+  DEBUG ((DEBUG_INFO, "    TNVMCAP (low 8-byte)  : 0x%lx\n", *((UINT64 *)Private->ControllerData->Tnvmcap)));
+  DEBUG ((DEBUG_INFO, "    RAB       : 0x%x\n", Private->ControllerData->Rab));
+  DEBUG ((DEBUG_INFO, "    IEEE      : 0x%x\n", *(UINT32 *)Private->ControllerData->Ieee_oui));
+  DEBUG ((DEBUG_INFO, "    AERL      : 0x%x\n", Private->ControllerData->Aerl));
+  DEBUG ((DEBUG_INFO, "    SQES      : 0x%x\n", Private->ControllerData->Sqes));
+  DEBUG ((DEBUG_INFO, "    CQES      : 0x%x\n", Private->ControllerData->Cqes));
+  DEBUG ((DEBUG_INFO, "    NN        : 0x%x\n", Private->ControllerData->Nn));
+
+  Status = NvmeControllerInitIoQueues (Private);
 
   return Status;
 }

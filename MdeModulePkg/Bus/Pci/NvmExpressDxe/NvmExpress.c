@@ -1000,9 +1000,8 @@ NvmExpressDriverBindingStart (
   EFI_PHYSICAL_ADDRESS                MappedAddr;
   UINTN                               Bytes;
   EFI_NVM_EXPRESS_PASS_THRU_PROTOCOL  *Passthru;
-  // MU_CHANGE - Support alternative hardware queue sizes in NVME driver
-  UINTN  QueuePageCount = PcdGetBool (PcdSupportAlternativeQueueSize) ?
-                          NVME_ALTERNATIVE_TOTAL_QUEUE_BUFFER_IN_PAGES : 6;
+  NVME_AQA                            *Aqa;
+  UINTN                               AdminQueuePageCount; // MU_CHANGE - Support alternative hardware queue sizes in NVME driver
 
   DEBUG ((DEBUG_INFO, "NvmExpressDriverBindingStart: start\n"));
 
@@ -1077,8 +1076,39 @@ NvmExpressDriverBindingStart (
     // MU_CHANGE - Support alternative hardware queue sizes in NVME driver
 
     //
-    // Depending on PCD disablement, either support the default or alternative
-    // queue sizes.
+    // Set the Admin Queue Atttributes
+    //
+    Aqa = AllocateZeroPool (sizeof (NVME_AQA));
+
+    if (Aqa == NULL) {
+      DEBUG ((DEBUG_ERROR, "NvmExpressDriverBindingStart: allocating pool for Nvme Aqa Data failed!\n"));
+      Status = EFI_OUT_OF_RESOURCES;
+      goto Exit;
+    }
+
+    // Set the sizes of the admin submission & completion queues in number of entries
+    Aqa->Asqs  = PcdGetBool (PcdSupportAlternativeQueueSize) ? MIN (NVME_ALTERNATIVE_MAX_QUEUE_SIZE, Private->Cap.Mqes) : NVME_ASQ_SIZE;
+    Aqa->Rsvd1 = 0;
+    Aqa->Acqs  = PcdGetBool (PcdSupportAlternativeQueueSize) ? MIN (NVME_ALTERNATIVE_MAX_QUEUE_SIZE, Private->Cap.Mqes) : NVME_ACQ_SIZE;
+    Aqa->Rsvd2 = 0;
+
+    //
+    // Save Queue Pair Data for admin queues in controller data structure
+    //
+    Private->SqData[0].NumberOfEntries = Aqa->Asqs;
+    Private->CqData[0].NumberOfEntries = Aqa->Acqs;
+
+    //
+    // Set admin queue entry size to default
+    //
+    Private->SqData[0].EntrySize = NVME_IOSQES_MIN;
+    Private->CqData[0].EntrySize = NVME_IOCQES_MIN;
+
+    // Calculate the number of pages required for the admin queues
+    // TODO create helper functions for calculating num pages for a queue.
+    AdminQueuePageCount = EFI_SIZE_TO_PAGES (Private->SqData[0].NumberOfEntries * 2^Private->SqData[0].EntrySize)
+                          + EFI_SIZE_TO_PAGES (Private->CqData[0].NumberOfEntries * 2^Private->CqData[0].EntrySize);
+
     //
     // Default:
     // 6 x 4kB aligned buffers will be carved out of this buffer.
@@ -1102,11 +1132,15 @@ NvmExpressDriverBindingStart (
     //
     // Allocate 15 pages of memory, then map it for bus master read and write.
     //
+
+    //
+    // Allocate Admin Queues
+    //
     Status = PciIo->AllocateBuffer (
                       PciIo,
                       AllocateAnyPages,
                       EfiBootServicesData,
-                      QueuePageCount,
+                      AdminQueuePageCount,
                       (VOID **)&Private->Buffer,
                       0
                       );
@@ -1115,7 +1149,7 @@ NvmExpressDriverBindingStart (
     }
 
     // MU_CHANGE - Support alternative hardware queue sizes in NVME driver
-    Bytes  = EFI_PAGES_TO_SIZE (QueuePageCount);
+    Bytes  = EFI_PAGES_TO_SIZE (AdminQueuePageCount);
     Status = PciIo->Map (
                       PciIo,
                       EfiPciIoOperationBusMasterCommonBuffer,
@@ -1126,7 +1160,7 @@ NvmExpressDriverBindingStart (
                       );
 
     // MU_CHANGE - Support alternative hardware queue sizes in NVME driver
-    if (EFI_ERROR (Status) || (Bytes != EFI_PAGES_TO_SIZE (QueuePageCount))) {
+    if (EFI_ERROR (Status) || (Bytes != EFI_PAGES_TO_SIZE (AdminQueuePageCount))) {
       goto Exit;
     }
 
@@ -1147,7 +1181,7 @@ NvmExpressDriverBindingStart (
     InitializeListHead (&Private->AsyncPassThruQueue);
     InitializeListHead (&Private->UnsubmittedSubtasks);
 
-    Status = NvmeControllerInit (Private);
+    Status = NvmeControllerInit (Private, Aqa);
     if (EFI_ERROR (Status)) {
       goto Exit;
     }
@@ -1241,7 +1275,7 @@ Exit:
 
   if ((Private != NULL) && (Private->Buffer != NULL)) {
     // MU_CHANGE - Support alternative hardware queue sizes in NVME driver
-    PciIo->FreeBuffer (PciIo, QueuePageCount, Private->Buffer);
+    PciIo->FreeBuffer (PciIo, AdminQueuePageCount, Private->Buffer);
   }
 
   if ((Private != NULL) && (Private->ControllerData != NULL)) {
@@ -1318,8 +1352,7 @@ NvmExpressDriverBindingStop (
   BOOLEAN                             IsEmpty;
   EFI_TPL                             OldTpl;
   // MU_CHANGE - Support alternative hardware queue sizes in NVME driver
-  UINT16  QueuePageCount = PcdGetBool (PcdSupportAlternativeQueueSize) ?
-                           NVME_ALTERNATIVE_TOTAL_QUEUE_BUFFER_IN_PAGES : 6;
+  UINTN  QueuePageCount;
 
   if (NumberOfChildren == 0) {
     Status = gBS->OpenProtocol (
@@ -1365,9 +1398,20 @@ NvmExpressDriverBindingStop (
         Private->PciIo->Unmap (Private->PciIo, Private->Mapping);
       }
 
+      // MU_CHANGE - Support different number of queues in NVME driver
+      QueuePageCount = EFI_SIZE_TO_PAGES (Private->SqData[0].NumberOfEntries * 2^Private->SqData[0].EntrySize)
+                       + EFI_SIZE_TO_PAGES (Private->CqData[0].NumberOfEntries * 2^Private->CqData[0].EntrySize);
       if (Private->Buffer != NULL) {
         // MU_CHANGE - Support alternative hardware queue sizes in NVME driver
         Private->PciIo->FreeBuffer (Private->PciIo, QueuePageCount, Private->Buffer);
+      }
+
+      if (Private->DataQueueMapping != NULL) {
+        Private->PciIo->Unmap (Private->PciIo, Private->DataQueueMapping);
+      }
+
+      if (Private->DataQueueBuffer != NULL) {
+        Private->PciIo->FreeBuffer (Private->PciIo, QueuePageCount*Private->Nsqa, Private->DataQueueBuffer);
       }
 
       FreePool (Private->ControllerData);

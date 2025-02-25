@@ -866,7 +866,10 @@ NvmExpressPassThru (
     //
     // Reset the NVMe controller.
     //
-    Status = NvmeControllerInit (Private);
+    // TODO do we want to tell the controller we officially want to reset it? This would reset the submission and completion queues and destroy everything else.
+    // Or do we want to duplicate the functionality of the old NvmeControllerInit() function? This would zero the queues' memory, not officially deleting the old queues.
+    // right now we keep the mapping, just zero the memory. This is a timeout case so is it safe to assume we can resume use of existing memory and mappings?
+    Status = NvmeControllerReset (Private);
     if (!EFI_ERROR (Status)) {
       Status = AbortAsyncPassThruTasks (Private);
       if (!EFI_ERROR (Status)) {
