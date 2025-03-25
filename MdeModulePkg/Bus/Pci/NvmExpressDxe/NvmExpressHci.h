@@ -18,8 +18,10 @@
 //
 #define NVME_ASQ_BUF_OFFSET  EFI_PAGE_SIZE
 
+// MU_CHANGE [BEGIN] - Allocate IO Queue Buffer
+
 /**
-  Initialize the Nvm Express controller.
+  Reset the Nvm Express controller.
 
   @param[in] Private                 The pointer to the NVME_CONTROLLER_PRIVATE_DATA data structure.
 
@@ -28,9 +30,27 @@
 
 **/
 EFI_STATUS
-NvmeControllerInit (
+NvmeControllerReset (
   IN NVME_CONTROLLER_PRIVATE_DATA  *Private
   );
+
+/**
+  Initialize the Nvm Express controller.
+
+  @param[in] Private                 The pointer to the NVME_CONTROLLER_PRIVATE_DATA data structure.
+  @param[in] Aqa                     The pointer to used to the NVME_AQA data structure.
+
+  @retval EFI_SUCCESS                The NVM Express Controller is initialized successfully.
+  @retval Others                     A device error occurred while initializing the controller.
+
+**/
+EFI_STATUS
+NvmeControllerInit (
+  IN NVME_CONTROLLER_PRIVATE_DATA  *Private,
+  IN NVME_AQA                      *Aqa
+  );
+
+// MU_CHANGE [END] - Allocate IO Queue Buffer
 
 /**
   Get identify controller data.

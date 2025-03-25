@@ -173,7 +173,7 @@ EnumerateNvmeDevNamespace (
     Device->BlockIo.FlushBlocks = NvmeBlockIoFlushBlocks;
 
     // MU_CHANGE [BEGIN] - Request Number of Queues from Controller
-    if (Private->NumberOfDataQueuePairs > 1) {
+    if (NVME_SUPPORT_BLOCKIO2 (Private)) {
       // We have multiple data queues, so we can support the BlockIo2 protocol
 
       // Create BlockIo2 Protocol instance
@@ -276,7 +276,7 @@ EnumerateNvmeDevNamespace (
       goto Exit;
     }
 
-    if (Private->NumberOfDataQueuePairs > 1) {
+    if (NVME_SUPPORT_BLOCKIO2 (Private)) {
       // We have multiple data queues, so we can support the BlockIo2 protocol
       Status = gBS->InstallMultipleProtocolInterfaces (
                       &Device->DeviceHandle,
@@ -314,7 +314,7 @@ EnumerateNvmeDevNamespace (
                );
 
         // MU_CHANGE [BEGIN] - Request Number of Queues from Controller
-        if (Private->NumberOfDataQueuePairs > 1) {
+        if (NVME_SUPPORT_BLOCKIO2 (Private)) {
           // We have multiple data queues, so we need to uninstall the BlockIo2 protocol
           gBS->UninstallMultipleProtocolInterfaces (
                  Device->DeviceHandle,
@@ -1002,6 +1002,11 @@ NvmExpressDriverBindingStart (
   EFI_PHYSICAL_ADDRESS                MappedAddr;
   UINTN                               Bytes;
   EFI_NVM_EXPRESS_PASS_THRU_PROTOCOL  *Passthru;
+  // MU_CHANGE [BEGIN] - Allocate IO Queue Buffer
+  NVME_AQA  Aqa;
+  UINTN     AdminQueuePageCount;
+
+  // MU_CHANGE [END] -  Allocate IO Queue Buffer
 
   DEBUG ((DEBUG_INFO, "NvmExpressDriverBindingStart: start\n"));
 
@@ -1073,7 +1078,35 @@ NvmExpressDriverBindingStart (
       DEBUG ((DEBUG_WARN, "NvmExpressDriverBindingStart: failed to enable 64-bit DMA (%r)\n", Status));
     }
 
+    // MU_CHANGE [BEGIN] - Allocate IO Queue Buffer
     //
+    // Set the Admin Queue Atttributes
+    //
+
+    // Set the sizes of the admin submission & completion queues in number of entries
+    Aqa.Asqs  = MIN (NVME_ASQ_SIZE, Private->Cap.Mqes);
+    Aqa.Rsvd1 = 0;
+    Aqa.Acqs  = MIN (NVME_ACQ_SIZE, Private->Cap.Mqes);
+    Aqa.Rsvd2 = 0;
+
+    //
+    // Save Queue Pair Data for admin queues in controller data structure
+    //
+    Private->SqData[0].NumberOfEntries = Aqa.Asqs;
+    Private->CqData[0].NumberOfEntries = Aqa.Acqs;
+
+    //
+    // Set admin queue entry size to default
+    //
+    Private->SqData[0].EntrySize = NVME_IOSQES_MIN;
+    Private->CqData[0].EntrySize = NVME_IOCQES_MIN;
+
+    // Calculate the number of pages required for the admin queues
+    AdminQueuePageCount = EFI_SIZE_TO_PAGES (Private->SqData[0].NumberOfEntries * (UINTN)LShiftU64 (2, Private->SqData[0].EntrySize))
+                          + EFI_SIZE_TO_PAGES (Private->CqData[0].NumberOfEntries * (UINTN)LShiftU64 (2, Private->CqData[0].EntrySize));
+    // MU_CHANGE [END] - Allocate IO Queue Buffer
+    //
+    // Default:
     // 6 x 4kB aligned buffers will be carved out of this buffer.
     // 1st 4kB boundary is the start of the admin submission queue.
     // 2nd 4kB boundary is the start of the admin completion queue.
@@ -1084,19 +1117,25 @@ NvmExpressDriverBindingStart (
     //
     // Allocate 6 pages of memory, then map it for bus master read and write.
     //
+
+    // MU_CHANGE [BEGIN] - Allocate IO Queue Buffer
+    //
+    // Allocate Admin Queues
+    //
     Status = PciIo->AllocateBuffer (
                       PciIo,
                       AllocateAnyPages,
                       EfiBootServicesData,
-                      6,
+                      AdminQueuePageCount,
                       (VOID **)&Private->Buffer,
                       0
                       );
+    // MU_CHANGE [END] - Allocate IO Queue Buffer
     if (EFI_ERROR (Status)) {
       goto Exit;
     }
 
-    Bytes  = EFI_PAGES_TO_SIZE (6);
+    Bytes  = EFI_PAGES_TO_SIZE (AdminQueuePageCount); // MU_CHANGE - Allocate IO Queue Buffer
     Status = PciIo->Map (
                       PciIo,
                       EfiPciIoOperationBusMasterCommonBuffer,
@@ -1105,8 +1144,8 @@ NvmExpressDriverBindingStart (
                       &MappedAddr,
                       &Private->Mapping
                       );
-
-    if (EFI_ERROR (Status) || (Bytes != EFI_PAGES_TO_SIZE (6))) {
+    // MU_CHANGE - Allocate IO Queue Buffer
+    if (EFI_ERROR (Status) || (Bytes != EFI_PAGES_TO_SIZE (AdminQueuePageCount))) {
       goto Exit;
     }
 
@@ -1127,7 +1166,7 @@ NvmExpressDriverBindingStart (
     InitializeListHead (&Private->AsyncPassThruQueue);
     InitializeListHead (&Private->UnsubmittedSubtasks);
 
-    Status = NvmeControllerInit (Private);
+    Status = NvmeControllerInit (Private, &Aqa); // MU_CHANGE - Allocate IO Queue Buffer
     if (EFI_ERROR (Status)) {
       goto Exit;
     }
@@ -1139,7 +1178,7 @@ NvmExpressDriverBindingStart (
     // The ProcessAsyncTaskList event and NVME_HC_ASYNC_TIMER timer are only used for the BlockIo2 protocol,
     // which is only installed when the number of IO queues is greater than 1
     //
-    if (Private->NumberOfDataQueuePairs > 1) {
+    if (NVME_SUPPORT_BLOCKIO2 (Private)) {
       Status = gBS->CreateEvent (
                       EVT_TIMER | EVT_NOTIFY_SIGNAL,
                       TPL_NOTIFY,
@@ -1224,7 +1263,14 @@ Exit:
   }
 
   if ((Private != NULL) && (Private->Buffer != NULL)) {
-    PciIo->FreeBuffer (PciIo, 6, Private->Buffer);
+    // MU_CHANGE [BEGIN] - Allocate IO Queue Buffer
+    Status = PciIo->FreeBuffer (PciIo, AdminQueuePageCount, Private->Buffer);
+
+    if (EFI_ERROR (Status)) {
+      DEBUG ((DEBUG_ERROR, "%a: FreeBuffer failed with %r\n", __func__, Status));
+    }
+
+    // MU_CHANGE [END] - Allocate IO Queue Buffer
   }
 
   if ((Private != NULL) && (Private->ControllerData != NULL)) {
@@ -1300,6 +1346,7 @@ NvmExpressDriverBindingStop (
   EFI_NVM_EXPRESS_PASS_THRU_PROTOCOL  *PassThru;
   BOOLEAN                             IsEmpty;
   EFI_TPL                             OldTpl;
+  UINTN                               QueuePageCount; // MU_CHANGE - Allocate IO Queue Buffer
 
   if (NumberOfChildren == 0) {
     Status = gBS->OpenProtocol (
@@ -1345,9 +1392,35 @@ NvmExpressDriverBindingStop (
         Private->PciIo->Unmap (Private->PciIo, Private->Mapping);
       }
 
+      // MU_CHANGE [BEGIN] - Allocate IO Queue Buffer
+      QueuePageCount = EFI_SIZE_TO_PAGES (Private->SqData[0].NumberOfEntries * (UINTN)LShiftU64 (2, Private->SqData[0].EntrySize))
+                       + EFI_SIZE_TO_PAGES (Private->CqData[0].NumberOfEntries * (UINTN)LShiftU64 (2, Private->CqData[0].EntrySize));
+
       if (Private->Buffer != NULL) {
-        Private->PciIo->FreeBuffer (Private->PciIo, 6, Private->Buffer);
+        Status = Private->PciIo->FreeBuffer (Private->PciIo, QueuePageCount, Private->Buffer);
+
+        if (EFI_ERROR (Status)) {
+          DEBUG ((DEBUG_ERROR, "%a: FreeBuffer Buffer failed %r\n", __func__, Status));
+        }
       }
+
+      if (Private->DataQueueMapping != NULL) {
+        Status = Private->PciIo->Unmap (Private->PciIo, Private->DataQueueMapping);
+
+        if (EFI_ERROR (Status)) {
+          DEBUG ((DEBUG_ERROR, "%a: Unmap DataQueueMapping failed %r\n", __func__, Status));
+        }
+      }
+
+      if (Private->DataQueueBuffer != NULL) {
+        Status = Private->PciIo->FreeBuffer (Private->PciIo, QueuePageCount*Private->NumberOfDataQueuePairs, Private->DataQueueBuffer);
+
+        if (EFI_ERROR (Status)) {
+          DEBUG ((DEBUG_ERROR, "%a: FreeBuffer DataQueueBuffer failed %r\n", __func__, Status));
+        }
+      }
+
+      // MU_CHANGE [END] - Allocate IO Queue Buffer
 
       FreePool (Private->ControllerData);
       FreePool (Private);
