@@ -923,7 +923,7 @@ NOOPT_VS2022_AARCH64_DLINK_FLAGS   = /NOLOGO /NODEFAULTLIB /IGNORE:4001 /IGNORE:
 # MU_CHANGE [END]
 
 # BaseTools cannot handle XIP modules with different section and file alignment
-*_VS2022_AARCH64_DLINK_XIPFLAGS    = /ALIGN:32
+*_VS2022_AARCH64_DLINK_XIPFLAGS    = /ALIGN:64
 
 ####################################################################################
 # GCC Common
