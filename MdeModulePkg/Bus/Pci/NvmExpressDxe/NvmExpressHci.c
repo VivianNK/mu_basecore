@@ -1017,7 +1017,6 @@ NvmeControllerInitAdminQueues (
   Initialize the Nvm Express controller.
 
   @param[in] Private                 The pointer to the NVME_CONTROLLER_PRIVATE_DATA data structure.
-  @param[in] Aqa                     The pointer to used to the NVME_AQA data structure. // MU_CHANGE - Allocate IO Queue Buffer
 
   @retval EFI_SUCCESS                The NVM Express Controller is initialized successfully.
   @retval Others                     A device error occurred while initializing the controller.
@@ -1025,8 +1024,7 @@ NvmeControllerInitAdminQueues (
 **/
 EFI_STATUS
 NvmeControllerInit (
-  IN NVME_CONTROLLER_PRIVATE_DATA  *Private,
-  IN NVME_AQA                      *Aqa // MU_CHANGE - Allocate IO Queue Buffer
+  IN NVME_CONTROLLER_PRIVATE_DATA  *Private
   )
 {
   EFI_STATUS            Status;
@@ -1039,6 +1037,11 @@ NvmeControllerInit (
   UINTN                 Bytes;
   UINT32                Index;
   EFI_PHYSICAL_ADDRESS  MappedAddr;
+  // MU_CHANGE [BEGIN] - Allocate IO Queue Buffer
+  NVME_AQA  Aqa;
+  UINTN     AdminQueuePageCount;
+
+  // MU_CHANGE [END] - Allocate IO Queue Buffer
 
   // MU_CHANGE [BEGIN] - Improve NVMe controller init robustness
   PciIo = Private->PciIo;
@@ -1117,6 +1120,86 @@ NvmeControllerInit (
   // MU_CHANGE [END] - Improve NVMe controller init robustness
 
   // MU_CHANGE [BEGIN] - Allocate IO Queue Buffer
+  //
+  // Set the Admin Queue Atttributes
+  //
+
+  // Set the sizes of the admin submission & completion queues in number of entries
+  // MU_CHANGE [BEGIN] - Support alternative hardware queue sizes in NVME driver
+  Aqa.Asqs  = PcdGetBool (PcdSupportAlternativeQueueSize) ? MIN (NVME_ALTERNATIVE_MAX_QUEUE_SIZE, Private->Cap.Mqes) : MIN (NVME_ASQ_SIZE, Private->Cap.Mqes);
+  Aqa.Rsvd1 = 0;
+  Aqa.Acqs  = PcdGetBool (PcdSupportAlternativeQueueSize) ? MIN (NVME_ALTERNATIVE_MAX_QUEUE_SIZE, Private->Cap.Mqes) : MIN (NVME_ACQ_SIZE, Private->Cap.Mqes);
+  Aqa.Rsvd2 = 0;
+  // MU_CHANGE [END] - Support alternative hardware queue sizes in NVME driver
+
+  //
+  // Save Queue Pair Data for admin queues in controller data structure
+  //
+  Private->SqData[0].NumberOfEntries = Aqa.Asqs;
+  Private->CqData[0].NumberOfEntries = Aqa.Acqs;
+
+  //
+  // Set admin queue entry size to default
+  //
+  Private->SqData[0].EntrySize = NVME_IOSQES_MIN;
+  Private->CqData[0].EntrySize = NVME_IOCQES_MIN;
+
+  // Calculate the number of pages required for the admin queues
+  AdminQueuePageCount = EFI_SIZE_TO_PAGES (Private->SqData[0].NumberOfEntries * (UINTN)LShiftU64 (2, Private->SqData[0].EntrySize))
+                        + EFI_SIZE_TO_PAGES (Private->CqData[0].NumberOfEntries * (UINTN)LShiftU64 (2, Private->CqData[0].EntrySize));
+
+  //
+  // Default:
+  // 6 x 4kB aligned buffers will be carved out of this buffer.
+  // 1st 4kB boundary is the start of the admin submission queue.
+  // 2nd 4kB boundary is the start of the admin completion queue.
+  // 3rd 4kB boundary is the start of I/O submission queue #1.
+  // 4th 4kB boundary is the start of I/O completion queue #1.
+  // 5th 4kB boundary is the start of I/O submission queue #2.
+  // 6th 4kB boundary is the start of I/O completion queue #2.
+  //
+  // Allocate 6 pages of memory, then map it for bus master read and write.
+  //
+  // MU_CHANGE [BEGIN] - Support alternative hardware queue sizes in NVME driver
+  // Alternative:
+  // 15 x 4kB aligned buffers will be carved out of this buffer.
+  // 1st 4kB boundary is the start of the admin submission queue.
+  // 5th 4kB boundary is the start of the admin completion queue.
+  // 6th 4kB boundary is the start of I/O submission queue #1.
+  // 10th 4kB boundary is the start of I/O completion queue #1.
+  // 11th 4kB boundary is the start of I/O submission queue #2.
+  // 15th 4kB boundary is the start of I/O completion queue #2.
+  //
+  // Allocate 15 pages of memory, then map it for bus master read and write.
+  // MU_CHANGE [END] - Support alternative hardware queue sizes in NVME driver
+  //
+  Status = PciIo->AllocateBuffer (
+                    PciIo,
+                    AllocateAnyPages,
+                    EfiBootServicesData,
+                    AdminQueuePageCount,
+                    (VOID **)&Private->Buffer,
+                    0
+                    );
+  if (EFI_ERROR (Status)) {
+    return Status;
+  }
+
+  Bytes  = EFI_PAGES_TO_SIZE (AdminQueuePageCount); // MU_CHANGE - Allocate IO Queue Buffer
+  Status = PciIo->Map (
+                    PciIo,
+                    EfiPciIoOperationBusMasterCommonBuffer,
+                    Private->Buffer,
+                    &Bytes,
+                    &MappedAddr,
+                    &Private->Mapping
+                    );
+  if (EFI_ERROR (Status) || (Bytes != EFI_PAGES_TO_SIZE (AdminQueuePageCount))) {
+    return Status;
+  }
+
+  Private->BufferPciAddr = (UINT8 *)(UINTN)MappedAddr;
+
   for (Index = 0; Index < NVME_MAX_QUEUES; Index++) {
     Private->Cid[Index]        = 0;
     Private->Pt[Index]         = 0;
@@ -1136,7 +1219,7 @@ NvmeControllerInit (
   //
   // Program admin queue attributes.
   //
-  Status = WriteNvmeAdminQueueAttributes (Private, Aqa); // MU_CHANGE - Allocate IO Queue Buffer
+  Status = WriteNvmeAdminQueueAttributes (Private, &Aqa); // MU_CHANGE - Allocate IO Queue Buffer
 
   if (EFI_ERROR (Status)) {
     return Status;
